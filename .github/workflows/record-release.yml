@@ -1,0 +1,62 @@
+# Paved Road · record production release (reusable)
+#
+# Creates the app repository's GitHub Release for a digest that reached production. Kept separate
+# from release.yml so that only the production caller grants contents: write; GitHub validates the
+# permissions of every job in a called workflow, even jobs an `if` would skip.
+name: record-release
+
+on:
+  workflow_call:
+    inputs:
+      image:
+        type: string
+        required: true
+      digest:
+        type: string
+        required: true
+
+permissions: {}
+
+jobs:
+  record:
+    name: record production release
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write # create the release and its tag
+      actions: read # read who approved the production deployment
+    env:
+      IMAGE: ${{ inputs.image }}
+      DIGEST: ${{ inputs.digest }}
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+      RUN_ID: ${{ github.run_id }}
+      COMMIT: ${{ github.sha }}
+    steps:
+      - uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+        with:
+          egress-policy: audit
+      - name: Create the production release
+        run: |
+          set -euo pipefail
+          tag="release-$(date -u +%Y.%m.%d)-${COMMIT::7}"
+          if gh release view "$tag" -R "$REPO" > /dev/null 2>&1; then
+            echo "release $tag already exists for this commit; nothing to do"; exit 0
+          fi
+          approvers=$(gh api "repos/$REPO/actions/runs/$RUN_ID/approvals" \
+            --jq '[.[] | select(.state=="approved") | .user.login] | unique | join(", ")')
+          {
+            echo "Promoted to **production** by the Triorex paved road."
+            echo
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Image | \`$IMAGE@$DIGEST\` |"
+            echo "| Commit | $COMMIT |"
+            echo "| Approved by | ${approvers:-n/a} |"
+            echo "| Pipeline run | https://github.com/$REPO/actions/runs/$RUN_ID |"
+            echo
+            echo "Verified before promotion: keyless signature and SLSA provenance from the central"
+            echo "secure-build workflow, CycloneDX SBOM attestation, and a signed promotion to staging."
+            echo "Verify yourself: \`gh attestation verify oci://$IMAGE@$DIGEST --owner ${REPO%%/*}\`"
+          } > notes.md
+          gh release create "$tag" -R "$REPO" --target "$COMMIT" --title "$tag" --notes-file notes.md
+          echo "Production release recorded: $tag" >> "$GITHUB_STEP_SUMMARY"
