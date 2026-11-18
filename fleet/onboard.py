@@ -63,6 +63,8 @@ def files_for(repo: dict, sha: str, version: str) -> dict[str, str]:
         ".pre-commit-config.yaml": render("pre-commit-config.yaml", vals),
         ".security/exceptions.yaml": render("exceptions.yaml", vals),
     }
+    if lang["build"]:
+        files[".github/workflows/registry-cleanup.yml"] = render("registry-cleanup.yml.tmpl", vals)
     if lang.get("dependabot"):
         files[".github/dependabot.yml"] = render(f"dependabot-{lang['dependabot']}.yml.tmpl", vals)
     return files

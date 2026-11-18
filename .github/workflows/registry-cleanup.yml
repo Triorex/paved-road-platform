@@ -1,0 +1,76 @@
+# Paved Road · registry cleanup (reusable, scheduled by each app repo)
+# Deletes container images that never reached an environment, with their signatures and
+# attestations. Promoted images, the newest builds and anything recent are always kept.
+name: registry-cleanup
+
+on:
+  workflow_call:
+    inputs:
+      package:
+        description: Container package name (defaults to the repository name)
+        type: string
+        default: ""
+      keep-last:
+        type: number
+        default: 10
+      min-age-days:
+        type: number
+        default: 7
+      apply:
+        description: Delete for real (false = report only)
+        type: boolean
+        default: false
+      platform-ref:
+        type: string
+        default: main
+
+permissions: {}
+
+jobs:
+  cleanup:
+    name: cleanup
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+      id-token: write # locate the platform commit
+    steps:
+      - uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+        with:
+          egress-policy: audit
+      - name: Locate the platform commit this workflow runs from
+        id: locate
+        env:
+          FALLBACK_REF: ${{ inputs.platform-ref }}
+        run: |
+          set -euo pipefail
+          repo="Triorex/paved-road-platform"; sha="$FALLBACK_REF"
+          if [ -n "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ]; then
+            jwt=$(curl -sSf -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+                  "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=paved-road-platform" | jq -r .value)
+            payload=$(printf '%s' "$jwt" | cut -d. -f2 | tr '_-' '/+')
+            while [ $(( ${#payload} % 4 )) -ne 0 ]; do payload="${payload}="; done
+            claims=$(printf '%s' "$payload" | base64 -d)
+            sha=$(jq -r '.job_workflow_sha' <<<"$claims")
+            repo=$(jq -r '.job_workflow_ref' <<<"$claims" | cut -d/ -f1-2)
+          fi
+          echo "repo=$repo" >> "$GITHUB_OUTPUT"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ steps.locate.outputs.repo }}
+          ref: ${{ steps.locate.outputs.sha }}
+          path: .platform
+          persist-credentials: false
+      - name: Clean up unpromoted images
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          OWNER: ${{ github.repository_owner }}
+          PACKAGE: ${{ inputs.package || github.event.repository.name }}
+          KEEP_LAST: ${{ inputs.keep-last }}
+          MIN_AGE: ${{ inputs.min-age-days }}
+          APPLY: ${{ inputs.apply }}
+        run: |
+          args=(--org "$OWNER" --package "$PACKAGE" --keep-last "$KEEP_LAST" --min-age-days "$MIN_AGE")
+          [ "$APPLY" = "true" ] && args+=(--apply)
+          python3 .platform/scripts/registry_cleanup.py "${args[@]}"

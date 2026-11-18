@@ -1,10 +1,18 @@
 # Paved Road · release (reusable)
 #
-# Promotes one immutable digest into an environment. Called once per environment by the app repo
-# (staging, then production). The environment's protection rules (required reviewers, main-only
-# deployments) live on the calling repo and are created by fleet/onboard.py.
-# Before anything is promoted, the signature AND the SLSA provenance are re-verified against the
-# central workflow identity, so nothing that bypassed the paved road can reach an environment.
+# Promotes ONE immutable, signed digest into an environment. Called once per environment by the
+# app repo (staging, then production). Rules this workflow enforces:
+#
+#   1. The digest must carry a keyless signature, SLSA provenance and an SBOM attestation from the
+#      central secure-build workflow.
+#   2. Production only accepts a digest that has a signed "promoted to staging" attestation, so
+#      staging cannot be skipped and no other image can be promoted.
+#   3. Promotion is an exact copy: the environment tag must resolve to the signed digest itself.
+#   4. Every promotion is recorded as a signed promotion attestation for that digest.
+#   5. A GitHub Release is created only when production promotion succeeds, so the releases list
+#      shows exactly what reached production.
+#
+# The environment's protection rules (required reviewers, main-only) live on the calling repo.
 name: release
 
 on:
@@ -26,8 +34,10 @@ permissions: {}
 env:
   COSIGN_VERSION: v2.6.4
   SIGNER_REGEX: ^https://github\.com/[Tt]riorex/paved-road-platform/\.github/workflows/secure-build\.yml@.+$
-  SIGNER_WORKFLOW: Triorex/paved-road-platform/.github/workflows/secure-build.yml
+  BUILD_WORKFLOW: Triorex/paved-road-platform/.github/workflows/secure-build.yml
+  RELEASE_WORKFLOW: Triorex/paved-road-platform/.github/workflows/release.yml
   OIDC_ISSUER: https://token.actions.githubusercontent.com
+  PROMOTION_TYPE: https://triorex.dev/attestations/promotion/v1
 
 jobs:
   promote:
@@ -37,12 +47,16 @@ jobs:
       name: ${{ inputs.environment }}
     permissions:
       contents: read
-      packages: write # add the environment tag
-      attestations: read
+      packages: write # move the environment tag
+      id-token: write # sign the promotion attestation
+      attestations: write
+    outputs:
+      promoted: ${{ steps.promote.outputs.promoted }}
     env:
       IMAGE: ${{ inputs.image }}
       DIGEST: ${{ inputs.digest }}
       TARGET_ENV: ${{ inputs.environment }}
+      REQUIRED_PRIOR: ${{ inputs.environment == 'production' && 'staging' || '' }}
     steps:
       - uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
         with:
@@ -68,16 +82,119 @@ jobs:
           set -euo pipefail
           for type in https://slsa.dev/provenance/v1 https://cyclonedx.org/bom; do
             gh attestation verify "oci://$IMAGE@$DIGEST" --owner "$OWNER" \
-              --signer-workflow "$SIGNER_WORKFLOW" --predicate-type "$type" > /dev/null
+              --signer-workflow "$BUILD_WORKFLOW" --predicate-type "$type" > /dev/null
             echo "attestation verified: $type"
           done
-      - name: Promote by digest (no rebuild)
-        run: docker buildx imagetools create --tag "$IMAGE:$TARGET_ENV" "$IMAGE@$DIGEST"
+      - name: Require evidence from the previous environment
+        if: env.REQUIRED_PRIOR != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          set -euo pipefail
+          if ! gh attestation verify "oci://$IMAGE@$DIGEST" --owner "$OWNER" \
+                 --signer-workflow "$RELEASE_WORKFLOW" --predicate-type "$PROMOTION_TYPE" \
+                 --format json > promotions.json 2> verify.err; then
+            cat verify.err
+            echo "::error::$DIGEST has no promotion attestation; it never passed $REQUIRED_PRIOR"
+            exit 1
+          fi
+          envs=$(jq -r '[.[].verificationResult.statement.predicate.environment] | unique | join(",")' promotions.json)
+          echo "promotion evidence for this digest: $envs"
+          if ! jq -e --arg env "$REQUIRED_PRIOR" '[.[].verificationResult.statement.predicate.environment] | index($env)' promotions.json > /dev/null; then
+            echo "::error::$DIGEST was never promoted to $REQUIRED_PRIOR; refusing to promote to $TARGET_ENV"
+            exit 1
+          fi
+          echo "verified: digest passed $REQUIRED_PRIOR"
+      - name: Promote by digest (exact copy, no rebuild, no re-wrap)
+        id: promote
+        run: |
+          set -euo pipefail
+          # --prefer-index=false: tag the signed manifest itself. The default wraps it in a new
+          # image index with a new, unsigned digest (found in v1.0.2; see docs/adr/0003).
+          docker buildx imagetools create --prefer-index=false --tag "$IMAGE:$TARGET_ENV" "$IMAGE@$DIGEST"
+          resolved=$(docker buildx imagetools inspect "$IMAGE:$TARGET_ENV" --format '{{json .Manifest.Digest}}' | tr -d '"')
+          if [ "$resolved" != "$DIGEST" ]; then
+            echo "::error::$IMAGE:$TARGET_ENV resolves to $resolved, not the signed digest $DIGEST"
+            exit 1
+          fi
+          echo "tag $TARGET_ENV -> $resolved (matches the signed digest)"
+          echo "promoted=true" >> "$GITHUB_OUTPUT"
+      - name: Promotion record (predicate)
+        env:
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+          COMMIT: ${{ github.sha }}
+          ACTOR: ${{ github.actor }}
+          TRIGGERING_ACTOR: ${{ github.triggering_actor }}
+        run: |
+          jq -n --arg env "$TARGET_ENV" --arg repo "$REPO" --arg run "$RUN_ID" --arg attempt "$RUN_ATTEMPT" \
+                --arg commit "$COMMIT" --arg actor "$ACTOR" --arg trig "$TRIGGERING_ACTOR" \
+                --arg at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            '{environment:$env, repository:$repo, commit:$commit, run_id:$run, run_attempt:$attempt,
+              actor:$actor, triggering_actor:$trig, promoted_at:$at}' > promotion.json
+          cat promotion.json
+      - name: Signed promotion attestation
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-name: ${{ env.IMAGE }}
+          subject-digest: ${{ env.DIGEST }}
+          predicate-type: ${{ env.PROMOTION_TYPE }}
+          predicate-path: promotion.json
+          push-to-registry: true
       - name: Summary
         run: |
           {
             echo "## Promoted to \`$TARGET_ENV\`"
-            echo "- Digest: \`$DIGEST\`"
+            echo "- Digest: \`$DIGEST\` (tag \`$TARGET_ENV\` verified to resolve to it)"
             echo "- Verified: keyless signature, SLSA provenance, CycloneDX SBOM attestation"
-            echo "- Tag \`$IMAGE:$TARGET_ENV\` now points at this digest"
+            [ -n "$REQUIRED_PRIOR" ] && echo "- Required evidence: signed promotion to \`$REQUIRED_PRIOR\`"
+            echo "- Recorded: signed promotion attestation (\`$PROMOTION_TYPE\`)"
           } >> "$GITHUB_STEP_SUMMARY"
+
+  # A release exists only for what reached production.
+  record-release:
+    name: record production release
+    if: inputs.environment == 'production' && needs.promote.outputs.promoted == 'true'
+    needs: promote
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write # create the release and its tag
+      actions: read # read who approved the production deployment
+    env:
+      IMAGE: ${{ inputs.image }}
+      DIGEST: ${{ inputs.digest }}
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+      RUN_ID: ${{ github.run_id }}
+      COMMIT: ${{ github.sha }}
+    steps:
+      - uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+        with:
+          egress-policy: audit
+      - name: Create the production release
+        run: |
+          set -euo pipefail
+          tag="release-$(date -u +%Y.%m.%d)-${COMMIT::7}"
+          if gh release view "$tag" -R "$REPO" > /dev/null 2>&1; then
+            echo "release $tag already exists for this commit; nothing to do"; exit 0
+          fi
+          approvers=$(gh api "repos/$REPO/actions/runs/$RUN_ID/approvals" \
+            --jq '[.[] | select(.state=="approved") | .user.login] | unique | join(", ")')
+          {
+            echo "Promoted to **production** by the Triorex paved road."
+            echo
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Image | \`$IMAGE@$DIGEST\` |"
+            echo "| Commit | $COMMIT |"
+            echo "| Approved by | ${approvers:-n/a} |"
+            echo "| Pipeline run | https://github.com/$REPO/actions/runs/$RUN_ID |"
+            echo
+            echo "Verified before promotion: keyless signature and SLSA provenance from the central"
+            echo "secure-build workflow, CycloneDX SBOM attestation, and a signed promotion to staging."
+            echo "Verify yourself: \`gh attestation verify oci://$IMAGE@$DIGEST --owner ${REPO%%/*}\`"
+          } > notes.md
+          gh release create "$tag" -R "$REPO" --target "$COMMIT" --title "$tag" --notes-file notes.md
+          echo "Production release recorded: $tag" >> "$GITHUB_STEP_SUMMARY"
