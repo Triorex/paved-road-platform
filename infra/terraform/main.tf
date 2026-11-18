@@ -59,39 +59,33 @@ resource "aws_iam_role_policy" "deploy" {
 }
 
 # --- Encryption ------------------------------------------------------------------------------
-# Explicit key policy: the account administers the key; only ECR (in this account) may use it.
-data "aws_iam_policy_document" "ecr_kms" {
-  # checkov:skip=CKV_AWS_109: AWS default key-policy pattern; account root administers the key, use is constrained below
-  # checkov:skip=CKV_AWS_111: write actions are scoped by kms:ViaService (ECR) and kms:CallerAccount conditions
-  # checkov:skip=CKV_AWS_356: in a KMS key policy, Resource "*" refers only to the key the policy is attached to
-  statement {
-    sid       = "AccountAdministersKey"
-    actions   = ["kms:*"]
-    resources = ["*"] #trivy:ignore:AVD-AWS-0057 in a key policy "*" means this key only
-    principals {
-      type        = "AWS"
-      identifiers = ["arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"]
-    }
-  }
-  statement {
-    sid       = "EcrUsesKeyInThisAccount"
-    actions   = ["kms:Encrypt", "kms:Decrypt", "kms:ReEncrypt*", "kms:GenerateDataKey*", "kms:DescribeKey", "kms:CreateGrant"]
-    resources = ["*"] #trivy:ignore:AVD-AWS-0057 in a key policy "*" means this key only
-    principals {
-      type        = "AWS"
-      identifiers = ["*"]
-    }
-    condition {
-      test     = "StringEquals"
-      variable = "kms:ViaService"
-      values   = ["ecr.${data.aws_region.current.region}.amazonaws.com"]
-    }
-    condition {
-      test     = "StringEquals"
-      variable = "kms:CallerAccount"
-      values   = [data.aws_caller_identity.current.account_id]
-    }
-  }
+# Explicit key policy: the account administers the key; only ECR in this account may use it.
+locals {
+  ecr_kms_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "AccountAdministersKey"
+        Effect    = "Allow"
+        Principal = { AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root" }
+        Action    = "kms:*"
+        Resource  = "*" # in a key policy, "*" means this key only
+      },
+      {
+        Sid       = "EcrUsesKeyInThisAccount"
+        Effect    = "Allow"
+        Principal = { AWS = "*" }
+        Action    = ["kms:Encrypt", "kms:Decrypt", "kms:ReEncrypt*", "kms:GenerateDataKey*", "kms:DescribeKey", "kms:CreateGrant"]
+        Resource  = "*"
+        Condition = {
+          StringEquals = {
+            "kms:ViaService"    = "ecr.${data.aws_region.current.region}.amazonaws.com"
+            "kms:CallerAccount" = data.aws_caller_identity.current.account_id
+          }
+        }
+      }
+    ]
+  })
 }
 
 data "aws_region" "current" {}
@@ -100,7 +94,7 @@ resource "aws_kms_key" "ecr" {
   description             = "Paved road: ECR image encryption"
   enable_key_rotation     = true
   deletion_window_in_days = 30
-  policy                  = data.aws_iam_policy_document.ecr_kms.json
+  policy                  = local.ecr_kms_policy
   tags                    = var.tags
 }
 

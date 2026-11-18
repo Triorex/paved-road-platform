@@ -19,7 +19,6 @@ import datetime as dt
 import os
 import re
 import sys
-import urllib.request
 
 sys.path.insert(0, os.path.dirname(__file__))
 from prlib import http_json, summary  # noqa: E402
@@ -83,9 +82,8 @@ def main(argv: list[str] | None = None) -> int:
     deleted, failed = 0, 0
     if args.apply:
         for v in delete:
-            req = urllib.request.Request(f"{base}/{v['id']}", headers=hdrs, method="DELETE")
             try:
-                urllib.request.urlopen(req, timeout=20)  # nosec B310 -- fixed https API host; nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
+                http_json(f"{base}/{v['id']}", headers=hdrs, method="DELETE")
                 deleted += 1
             except Exception as exc:  # report and continue; never abort half-way silently
                 failed += 1
