@@ -1,0 +1,27 @@
+{
+  "permissions": {"enabled_repositories": "all", "allowed_actions": "selected", "sha_pinning_required": true},
+  "selected_actions": {
+    "github_owned_allowed": true,
+    "verified_allowed": false,
+    "patterns_allowed": [
+      "Triorex/*",
+      "step-security/harden-runner@*",
+      "aquasecurity/trivy-action@*",
+      "aquasecurity/setup-trivy@*",
+      "google/osv-scanner-action/osv-scanner-action@*",
+      "hadolint/hadolint-action@*",
+      "zaproxy/action-api-scan@*",
+      "zaproxy/action-baseline@*",
+      "docker/setup-buildx-action@*",
+      "docker/login-action@*",
+      "docker/build-push-action@*",
+      "anchore/sbom-action@*",
+      "sigstore/cosign-installer@*",
+      "helm/kind-action@*",
+      "ossf/scorecard-action@*",
+      "zizmorcore/zizmor-action@*",
+      "jfrog/setup-jfrog-cli@*"
+    ]
+  },
+  "workflow_permissions": {"default_workflow_permissions": "read", "can_approve_pull_request_reviews": false}
+}

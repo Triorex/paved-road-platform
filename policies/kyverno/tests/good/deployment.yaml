@@ -1,0 +1,16 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: good-app, namespace: payments }
+spec:
+  selector: { matchLabels: { app: good-app } }
+  template:
+    metadata: { labels: { app: good-app } }
+    spec:
+      containers:
+        - name: app
+          image: ghcr.io/triorex/payments-api:sha-1a2b3c4
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }

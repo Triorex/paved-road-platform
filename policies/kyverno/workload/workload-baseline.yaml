@@ -1,0 +1,80 @@
+# Workload policies. The same file runs in two places:
+#   1. In CI (pr-security.yml, policy job): the Kyverno CLI applies it to the manifests in the PR,
+#      so a bad manifest fails before merge.
+#   2. In the cluster (admission-test.yml and the demo): Kyverno enforces it at admission.
+# Rules are written for Pods; Kyverno auto-generates the matching rules for Deployments and other
+# pod controllers.
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: paved-road-workload-baseline
+  annotations:
+    policies.kyverno.io/title: Paved Road workload baseline
+    policies.kyverno.io/category: Pod Security
+    policies.kyverno.io/severity: high
+    policies.kyverno.io/description: >-
+      Approved registry only, no mutable :latest tags, non-root, no privilege escalation,
+      read-only root filesystem, all capabilities dropped, no privileged containers.
+spec:
+  background: true
+  rules:
+    - name: approved-registry
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+      exclude:
+        any:
+          - resources:
+              namespaces: [kube-system, kyverno, local-path-storage]
+      validate:
+        failureAction: Enforce
+        message: "Images must come from ghcr.io/triorex/ (the paved-road registry)."
+        pattern:
+          spec:
+            containers:
+              - image: "ghcr.io/triorex/*"
+            =(initContainers):
+              - image: "ghcr.io/triorex/*"
+
+    - name: disallow-latest-tag
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+      exclude:
+        any:
+          - resources:
+              namespaces: [kube-system, kyverno, local-path-storage]
+      validate:
+        failureAction: Enforce
+        message: "Mutable ':latest' tags are not allowed; reference a commit tag or a digest."
+        pattern:
+          spec:
+            containers:
+              - image: "!*:latest"
+
+    - name: require-hardened-security-context
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+      exclude:
+        any:
+          - resources:
+              namespaces: [kube-system, kyverno, local-path-storage]
+      validate:
+        failureAction: Enforce
+        message: >-
+          Containers must run as non-root, without privilege escalation or privileged mode,
+          with a read-only root filesystem and all capabilities dropped.
+        pattern:
+          spec:
+            containers:
+              - securityContext:
+                  runAsNonRoot: true
+                  allowPrivilegeEscalation: false
+                  readOnlyRootFilesystem: true
+                  =(privileged): false
+                  capabilities:
+                    drop: ["ALL"]

@@ -1,0 +1,74 @@
+# CI for the platform itself. The platform eats its own cooking: its PRs pass through the same
+# pr-security gates it ships to the fleet, plus tests for its scripts and its Kyverno policies.
+name: platform-ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pr-security:
+    name: pr-security
+    uses: ./.github/workflows/pr-security.yml
+    with:
+      codeql-languages: '["python","actions"]'
+      k8s-manifests: policies/kyverno/tests/good
+      iac-skip-dirs: policies/kyverno/tests
+    permissions:
+      contents: read
+      id-token: write
+      security-events: write
+      pull-requests: write
+      actions: read
+
+  unit-tests:
+    name: script tests
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.13"
+      - run: pip install --disable-pip-version-check -r requirements-dev.txt
+      - run: python -m pytest -q tests
+
+  policy-tests:
+    name: kyverno policy tests
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    env:
+      KYVERNO_VERSION: v1.19.2
+    steps:
+      - uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install Kyverno CLI (checksum-verified)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          gh release download "$KYVERNO_VERSION" -R kyverno/kyverno \
+            -p "kyverno-cli_${KYVERNO_VERSION}_linux_x86_64.tar.gz" -p checksums.txt
+          grep " kyverno-cli_${KYVERNO_VERSION}_linux_x86_64.tar.gz$" checksums.txt | sha256sum -c -
+          tar -xzf "kyverno-cli_${KYVERNO_VERSION}_linux_x86_64.tar.gz" kyverno
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+      - run: kyverno test policies/kyverno/tests/

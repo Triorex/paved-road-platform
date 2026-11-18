@@ -1,0 +1,7 @@
+# Platform repo: changes to the paved road affect every repo in the fleet.
+*                       @Triorex/platform
+/security/              @Triorex/appsec
+/policies/              @Triorex/appsec
+/.github/workflows/     @Triorex/appsec @Triorex/platform
+/governance/            @Triorex/appsec @Triorex/platform
+/.github/CODEOWNERS     @Triorex/appsec

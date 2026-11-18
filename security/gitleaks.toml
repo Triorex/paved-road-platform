@@ -1,0 +1,16 @@
+# gitleaks config for the paved road: all built-in rules plus org-specific token formats.
+title = "Triorex paved-road gitleaks config"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "triorex-internal-api-key"
+description = "Triorex internal service API key"
+regex = '''trx_(live|test)_[A-Za-z0-9]{32}'''
+keywords = ["trx_live_", "trx_test_"]
+tags = ["key", "internal"]
+
+[allowlist]
+description = "Lockfile integrity hashes and SARIF fixtures are not secrets"
+paths = ['''package-lock\.json''', '''.*\.sarif$''']

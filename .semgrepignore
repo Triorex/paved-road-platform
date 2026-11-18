@@ -1,0 +1,6 @@
+# Kyverno policies contain pod-spec *patterns*, not workloads; Kubernetes rules misfire on them.
+policies/kyverno/
+# Defaults
+.venv/
+node_modules/
+tests/

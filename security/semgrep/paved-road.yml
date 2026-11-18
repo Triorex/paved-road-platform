@@ -1,0 +1,50 @@
+# Org-specific Semgrep rules: patterns that matter here and that registry packs miss or rate low.
+# Severity ERROR blocks the PR (security-policy.yml: sast.fail_on_levels).
+rules:
+  - id: triorex-python-sql-string-building
+    languages: [python]
+    severity: ERROR
+    message: >-
+      SQL built with string formatting reaches a cursor. Use parameterised queries
+      (cursor.execute("... WHERE id = ?", (value,))). OWASP A03 Injection.
+    metadata: { cwe: "CWE-89", owasp: "A03:2021", category: security }
+    patterns:
+      - pattern-either:
+          - pattern: $CUR.execute(f"...", ...)
+          - pattern: $CUR.execute("..." % ..., ...)
+          - pattern: $CUR.execute("..." + ..., ...)
+          - pattern: $CUR.execute("...".format(...), ...)
+          - pattern: $CUR.execute(f"...")
+          - pattern: $CUR.execute("..." % ...)
+          - pattern: $CUR.execute("..." + ...)
+          - pattern: $CUR.execute("...".format(...))
+
+  - id: triorex-js-sql-string-building
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: SQL built with string concatenation or template literals. Use placeholders. OWASP A03 Injection.
+    metadata: { cwe: "CWE-89", owasp: "A03:2021", category: security }
+    pattern-either:
+      - pattern: $DB.$METHOD(`...${...}...`, ...)
+      - pattern: $DB.$METHOD("..." + $X, ...)
+      - pattern: $DB.$METHOD(`...${...}...`)
+      - pattern: $DB.$METHOD("..." + $X)
+    metavariable-regex:
+      metavariable: $METHOD
+      regex: ^(query|exec|run|all|get|prepare|execute)$
+
+  - id: triorex-subprocess-shell-true
+    languages: [python]
+    severity: ERROR
+    message: subprocess with shell=True enables command injection. Pass an argument list instead.
+    metadata: { cwe: "CWE-78", owasp: "A03:2021", category: security }
+    pattern: subprocess.$FN(..., shell=True, ...)
+
+  - id: triorex-hardcoded-jwt-secret
+    languages: [python, javascript, typescript]
+    severity: ERROR
+    message: JWT signing secret is hard-coded. Load it from the secrets manager at runtime.
+    metadata: { cwe: "CWE-798", owasp: "A07:2021", category: security }
+    pattern-either:
+      - pattern: jwt.encode($PAYLOAD, "...", ...)
+      - pattern: jwt.sign($PAYLOAD, "...", ...)

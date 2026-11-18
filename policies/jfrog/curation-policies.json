@@ -1,0 +1,11 @@
+{
+  "_comment": "JFrog Curation policies (POST /xray/api/v1/curation/policies). Condition names match the built-in Curation conditions. Design only.",
+  "policies": [
+    {"name": "block-malicious", "condition": "Malicious package", "scope": "all_repos", "policy_action": "block", "notify_emails": ["appsec@triorex.example"]},
+    {"name": "block-immature", "condition": "Package version is immature", "condition_params": {"days": 7}, "scope": "all_repos", "policy_action": "block",
+     "waivers": "request via AppSec; mirrors the 'package' exception type in .security/exceptions.yaml"},
+    {"name": "block-critical-with-fix", "condition": "CVE with CVSS score of 9 or above (with fix version available)", "scope": "all_repos", "policy_action": "block"},
+    {"name": "block-banned-licenses", "condition": "License is banned", "condition_params": {"banned": ["AGPL-3.0-only", "AGPL-3.0-or-later", "SSPL-1.0", "BUSL-1.1"]}, "scope": "all_repos", "policy_action": "block"},
+    {"name": "audit-unmaintained", "condition": "Package is not maintained (OpenSSF Scorecard < 3)", "scope": "all_repos", "policy_action": "dry_run"}
+  ]
+}

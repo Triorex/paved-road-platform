@@ -1,0 +1,35 @@
+# Paved Road security policy: the single source of thresholds for every gate in the fleet.
+#
+# Every reusable workflow reads this file at the same commit the caller pinned, so changing a
+# value here and cutting a platform release changes behaviour for all ~80 repos at once, with no
+# change in any app repo. Each gate has a mode:
+#   enforce  -> a failure blocks the pull request or build
+#   audit    -> the gate still runs and reports (Security tab, PR summary) but never blocks
+# New rules start in audit, get tuned for false positives, then move to enforce.
+version: 1
+
+gates:
+  secrets:            { mode: enforce }                       # GHAS push protection + gitleaks history scan
+  sast:               { mode: enforce, fail_on_levels: [error] }  # Semgrep + Bandit SARIF levels; CodeQL alerts gate via code scanning
+  dependency_review:  { mode: enforce, fail_on_severity: high }    # PR diff only
+  sca:                { mode: enforce, severities: "HIGH,CRITICAL", ignore_unfixed: true }  # Trivy fs is the gate; OSV-Scanner reports
+  curation:           { mode: enforce, min_release_age_days: 7 }
+  iac:                { mode: enforce, severities: "HIGH,CRITICAL" }   # Trivy config is the gate; Checkov reports
+  workflow_security:  { mode: enforce, min_severity: medium }          # zizmor, actionlint, SHA pinning
+  policy:             { mode: enforce }                                # Kyverno CLI on Kubernetes manifests
+  exceptions:         { mode: enforce, max_days: 90 }
+  image_scan:         { mode: enforce, severities: "HIGH,CRITICAL", ignore_unfixed: true }
+  image_lint:         { mode: enforce, dockle_exit_level: fatal }
+  dast:               { mode: enforce }                                # ZAP: FAIL rules in security/zap-rules.tsv
+
+licenses:
+  # SPDX identifiers allowed in shipped dependencies. Anything else needs an exception.
+  allow: [MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC, PSF-2.0, Python-2.0, 0BSD, Unlicense, CC0-1.0, BlueOak-1.0.0, MPL-2.0]
+
+sla_days:
+  # Remediation deadlines used by vuln-triage. KEV-listed findings are treated as zero-day.
+  zero_day: 2
+  critical: 7
+  high: 30
+  medium: 90
+  low: 180

@@ -1,0 +1,51 @@
+# Admission policy: only images built and signed by the central paved-road workflow may run.
+#
+# The keyless signing identity is the reusable workflow in paved-road-platform, not the app repo,
+# so this single policy covers every repository in the fleet. An image built on a laptop, or by a
+# pipeline that skipped the gates, has no such signature and is denied.
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: verify-paved-road-images
+  annotations:
+    policies.kyverno.io/title: Verify paved-road image signatures
+    policies.kyverno.io/category: Software Supply Chain Security
+    policies.kyverno.io/severity: high
+    policies.kyverno.io/description: >-
+      Requires every ghcr.io/triorex image to carry a Sigstore keyless signature and a CycloneDX SBOM
+      attestation issued to the central secure-build.yml workflow. Rewrites tags to digests.
+spec:
+  background: false
+  webhookTimeoutSeconds: 30
+  rules:
+    - name: require-paved-road-signature
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+              namespaceSelector:
+                matchLabels:
+                  paved-road.triorex.io/enforce: "true"
+      verifyImages:
+        - imageReferences:
+            - "ghcr.io/triorex/*"
+          failureAction: Enforce
+          mutateDigest: true
+          verifyDigest: true
+          required: true
+          attestors:
+            - entries:
+                - keyless:
+                    issuer: "https://token.actions.githubusercontent.com"
+                    subjectRegExp: "^https://github\\.com/[Tt]riorex/paved-road-platform/\\.github/workflows/secure-build\\.yml@.+$"
+                    rekor:
+                      url: https://rekor.sigstore.dev
+          attestations:
+            - type: https://cyclonedx.org/bom
+              attestors:
+                - entries:
+                    - keyless:
+                        issuer: "https://token.actions.githubusercontent.com"
+                        subjectRegExp: "^https://github\\.com/[Tt]riorex/paved-road-platform/\\.github/workflows/secure-build\\.yml@.+$"
+                        rekor:
+                          url: https://rekor.sigstore.dev

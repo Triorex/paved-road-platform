@@ -1,0 +1,12 @@
+{
+  "_comment": "Public-org hardening. 2FA requirement has no REST API: enable it in Settings > Authentication security.",
+  "org": {
+    "members_can_create_public_repositories": false,
+    "members_can_create_private_repositories": false,
+    "members_can_fork_private_repositories": false,
+    "default_repository_permission": "read",
+    "web_commit_signoff_required": false
+  },
+  "fork_pr_contributor_approval": {"approval_policy": "all_external_contributors"},
+  "artifact_and_log_retention": {"days": 7}
+}

@@ -1,0 +1,15 @@
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: paved-road-workload-baseline
+policies:
+  - ../workload/workload-baseline.yaml
+resources:
+  - resources.yaml
+results:
+  - { policy: paved-road-workload-baseline, rule: autogen-approved-registry,                kind: Deployment, resources: [good-app, privileged-app, latest-app], result: pass }
+  - { policy: paved-road-workload-baseline, rule: autogen-approved-registry,                kind: Deployment, resources: [dockerhub-app],                         result: fail }
+  - { policy: paved-road-workload-baseline, rule: autogen-disallow-latest-tag,              kind: Deployment, resources: [good-app, privileged-app, dockerhub-app], result: pass }
+  - { policy: paved-road-workload-baseline, rule: autogen-disallow-latest-tag,              kind: Deployment, resources: [latest-app],                            result: fail }
+  - { policy: paved-road-workload-baseline, rule: autogen-require-hardened-security-context, kind: Deployment, resources: [good-app, dockerhub-app, latest-app],   result: pass }
+  - { policy: paved-road-workload-baseline, rule: autogen-require-hardened-security-context, kind: Deployment, resources: [privileged-app],                        result: fail }

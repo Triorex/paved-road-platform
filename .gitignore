@@ -1,0 +1,10 @@
+.venv/
+__pycache__/
+.pytest_cache/
+*.sarif
+*.tar
+.terraform/
+.terraform.lock.hcl
+terraform.tfstate*
+.DS_Store
+fleet-report.md

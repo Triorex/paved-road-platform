@@ -1,0 +1,11 @@
+{
+  "general_data": {"name": "paved-road-prod", "description": "Every curated remote, every release repo, every build", "active": true},
+  "project_resources": {"resources": [
+    {"type": "repository", "name": "pypi-remote"},
+    {"type": "repository", "name": "npm-remote"},
+    {"type": "repository", "name": "docker-remote"},
+    {"type": "repository", "name": "release-docker-prod"},
+    {"type": "all-builds", "name": "All Builds"}
+  ]},
+  "assigned_policies": [{"name": "paved-road-security", "type": "security"}, {"name": "paved-road-licenses", "type": "license"}]
+}

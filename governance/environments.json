@@ -1,0 +1,4 @@
+{
+  "staging":    {"reviewer_teams": [],         "wait_timer": 0, "main_only": true},
+  "production": {"reviewer_teams": ["appsec"], "wait_timer": 0, "main_only": true, "prevent_self_review": false}
+}

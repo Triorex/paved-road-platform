@@ -1,0 +1,24 @@
+[
+  {
+    "name": "paved-road-security",
+    "type": "security",
+    "description": "Fail builds on high or critical vulnerabilities that have a fix",
+    "rules": [{
+      "name": "high-with-fix",
+      "priority": 1,
+      "criteria": {"min_severity": "high", "fix_version_dependant": true},
+      "actions": {"fail_build": true, "block_download": {"active": false, "unscanned": false}, "notify_watch_recipients": true}
+    }]
+  },
+  {
+    "name": "paved-road-licenses",
+    "type": "license",
+    "description": "Allowlist mirrors security/security-policy.yml licenses.allow",
+    "rules": [{
+      "name": "allowlist",
+      "priority": 1,
+      "criteria": {"allowed_licenses": ["MIT", "Apache-2.0", "BSD-2-Clause", "BSD-3-Clause", "ISC", "PSF-2.0", "Python-2.0", "0BSD", "Unlicense", "CC0-1.0", "BlueOak-1.0.0", "MPL-2.0"], "allow_unknown": false},
+      "actions": {"fail_build": true}
+    }]
+  }
+]

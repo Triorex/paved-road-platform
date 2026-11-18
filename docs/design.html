@@ -1,0 +1,710 @@
+<title>Paved Road Architecture</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+<style>
+/* Layout: a single engineering document column (~68ch) with full-bleed figures and tables that scroll inside their own frames. */
+:root {
+  --bg: #F3F5F8;
+  --surface: #FFFFFF;
+  --band: #E7ECF3;
+  --ink: #142033;
+  --muted: #5A6577;
+  --rule: #CDD5E0;
+  --accent: #1F3F78;
+  --live: #0E7A66;
+  --design: #A86200;
+  --deny: #B42318;
+  --code-bg: #EDF1F6;
+  --font-display: "IBM Plex Sans Condensed", "Arial Narrow", "Helvetica Neue", Arial, sans-serif;
+  --font-body: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0D131D; --surface: #141C29; --band: #1B2536; --ink: #E4EAF2; --muted: #98A4B6;
+    --rule: #2B3749; --accent: #8FB2EE; --live: #3CC2A6; --design: #E8A53E; --deny: #F07468; --code-bg: #182233;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0D131D; --surface: #141C29; --band: #1B2536; --ink: #E4EAF2; --muted: #98A4B6;
+  --rule: #2B3749; --accent: #8FB2EE; --live: #3CC2A6; --design: #E8A53E; --deny: #F07468; --code-bg: #182233;
+  color-scheme: dark;
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.6;
+}
+.page {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 40px 72px;
+  display: grid;
+  gap: 56px;
+}
+.prose { max-width: 68ch; }
+h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; color: var(--ink); line-height: 1.15; margin: 0; }
+h1 { font-size: clamp(2.4rem, 6vw, 3.6rem); font-weight: 700; letter-spacing: -0.01em; }
+h2 { font-size: 1.7rem; font-weight: 600; }
+h3 { font-size: 1.15rem; font-weight: 600; }
+p { margin: 0; }
+section { display: grid; gap: 18px; }
+.sec-num { font-family: var(--font-mono); font-size: 0.8rem; color: var(--accent); letter-spacing: 0.08em; font-weight: 500; }
+.sec-head { display: grid; gap: 4px; border-top: 1px solid var(--rule); padding-top: 22px; }
+code, .mono { font-family: var(--font-mono); font-size: 0.88em; }
+:not(pre) > code { background: var(--code-bg); padding: 1px 5px; border-radius: 3px; }
+
+/* header */
+header.doc { display: grid; gap: 16px; }
+.eyebrow { font-family: var(--font-mono); font-size: 0.78rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.lede { font-size: 1.2rem; color: var(--ink); max-width: 60ch; }
+.meta { display: flex; flex-wrap: wrap; gap: 8px 28px; font-size: 0.9rem; color: var(--muted); }
+.meta b { color: var(--ink); font-weight: 600; }
+
+/* status pills */
+.pill { display: inline-flex; align-items: center; gap: 6px; font-family: var(--font-mono); font-size: 0.72rem; font-weight: 500; letter-spacing: 0.04em; text-transform: uppercase; white-space: nowrap; }
+.pill::before { content: ""; width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.pill.live { color: var(--live); }
+.pill.live::before { background: var(--live); }
+.pill.design { color: var(--design); }
+.pill.design::before { border: 1.5px dashed var(--design); width: 6px; height: 6px; }
+
+/* figures */
+figure { margin: 0; display: grid; gap: 12px; }
+.fig-frame { background: var(--surface); border: 1px solid var(--rule); border-radius: 8px; overflow-x: auto; padding: 12px; }
+.fig-frame svg { display: block; width: 100%; height: auto; }
+.fig-frame.wide svg { min-width: 1000px; }
+.fig-frame.mid svg { min-width: 760px; }
+figcaption { font-size: 0.92rem; color: var(--muted); max-width: 80ch; }
+.scroll-hint { display: none; font-size: 0.8rem; color: var(--muted); font-family: var(--font-mono); }
+@media (max-width: 1040px) { .scroll-hint { display: block; } }
+
+/* svg classes (themed from page tokens) */
+.flow { color: var(--ink); font-family: var(--font-body); }
+.flow .box { fill: var(--surface); stroke: var(--rule); stroke-width: 1.2; }
+.flow .box-strong { fill: var(--surface); stroke: var(--accent); stroke-width: 1.6; }
+.flow .band { fill: var(--band); }
+.flow .plane { fill: var(--band); stroke: var(--rule); stroke-width: 1; }
+.flow .chip { fill: var(--surface); stroke: var(--rule); stroke-width: 1; }
+.flow .t-ink { fill: var(--ink); }
+.flow .t-muted { fill: var(--muted); }
+.flow .t-accent { fill: var(--accent); }
+.flow .t-live { fill: var(--live); }
+.flow .t-design { fill: var(--design); }
+.flow .t-deny { fill: var(--deny); }
+.flow .mono { font-family: var(--font-mono); }
+.flow .disp { font-family: var(--font-display); }
+.flow .dot-live { fill: var(--live); }
+.flow .dot-design { fill: none; stroke: var(--design); stroke-width: 1.6; stroke-dasharray: 2 2; }
+.flow .wire { stroke: var(--ink); stroke-width: 1.5; fill: none; }
+.flow .wire-soft { stroke: var(--muted); stroke-width: 1.3; fill: none; }
+.flow .wire-loop { stroke: var(--live); stroke-width: 1.6; fill: none; stroke-dasharray: 6 4; }
+
+/* tables */
+.table-wrap { overflow-x: auto; border: 1px solid var(--rule); border-radius: 8px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 0.9rem; line-height: 1.45; }
+th, td { text-align: left; vertical-align: top; padding: 10px 14px; border-bottom: 1px solid var(--rule); }
+th { font-family: var(--font-mono); font-size: 0.72rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); font-weight: 500; background: var(--band); position: sticky; top: 0; }
+tbody tr:last-child td { border-bottom: none; }
+td.stage { font-family: var(--font-display); font-weight: 600; white-space: nowrap; }
+tr.group td { background: var(--band); font-family: var(--font-display); font-weight: 600; font-size: 0.95rem; padding-block: 8px; }
+.table-wrap.controls table { min-width: 860px; }
+.table-wrap.fleet table { min-width: 720px; }
+.table-wrap.cov table { min-width: 680px; }
+
+/* lists & blocks */
+ul, ol { margin: 0; padding-left: 1.25em; display: grid; gap: 6px; }
+.principles { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 0; border: 1px solid var(--rule); border-radius: 8px; background: var(--surface); overflow: hidden; }
+.principles div { padding: 16px 18px; border-right: 1px solid var(--rule); border-bottom: 1px solid var(--rule); display: grid; gap: 4px; align-content: start; }
+.principles dt { font-family: var(--font-display); font-weight: 600; font-size: 1.02rem; }
+.principles dd { margin: 0; color: var(--muted); font-size: 0.92rem; }
+pre { margin: 0; background: var(--code-bg); border: 1px solid var(--rule); border-radius: 8px; padding: 16px 18px; overflow-x: auto; font-family: var(--font-mono); font-size: 0.82rem; line-height: 1.55; color: var(--ink); }
+.repos { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+.repos > div { display: grid; gap: 8px; min-width: 0; align-content: start; }
+.repos h3 { font-family: var(--font-mono); font-size: 0.95rem; font-weight: 600; }
+.repos p { font-size: 0.9rem; color: var(--muted); }
+.steps { counter-reset: step; list-style: none; padding: 0; display: grid; gap: 0; border-left: 2px solid var(--rule); margin-left: 10px; }
+.steps > li { position: relative; padding: 0 0 22px 28px; display: grid; gap: 6px; }
+.steps > li::before { counter-increment: step; content: counter(step, decimal-leading-zero); position: absolute; left: -15px; top: 0; width: 28px; height: 28px; border-radius: 50%; background: var(--surface); border: 2px solid var(--accent); color: var(--accent); font-family: var(--font-mono); font-size: 0.72rem; font-weight: 600; display: grid; place-items: center; }
+.steps > li:first-child::before { content: "00"; }
+.steps h3 { padding-top: 3px; }
+.steps ul { font-size: 0.93rem; }
+.note { border-left: 3px solid var(--design); background: var(--surface); padding: 12px 16px; font-size: 0.93rem; border-radius: 0 6px 6px 0; }
+.note.ok { border-left-color: var(--live); }
+.two-col { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px; }
+.two-col > * { min-width: 0; }
+footer { font-size: 0.85rem; color: var(--muted); border-top: 1px solid var(--rule); padding-top: 18px; }
+a { color: var(--accent); }
+@media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
+</style>
+
+<div class="page">
+
+<header class="doc">
+  <div class="eyebrow">Design document · v1.0 · November 18, 2026</div>
+  <h1>Paved Road</h1>
+  <p class="lede">An end-to-end secure software supply chain on GitHub Actions, built so that one central set of reusable workflows protects a fleet of about 80 repositories, from the developer's laptop to production.</p>
+  <div class="meta">
+    <span><b>Author</b> Blaise Ngwa Shu</span>
+        <span><b>GitHub home</b> <code>github.com/triorex</code></span>
+  </div>
+  <div class="meta">
+    <span class="pill live">Runs live in the demo</span>
+    <span class="pill design">Design and config only</span>
+  </div>
+</header>
+
+<!-- 1. OVERVIEW DIAGRAM -->
+<section id="overview">
+  <div class="sec-head"><span class="sec-num">§1</span><h2>The workflow at a glance</h2></div>
+  <figure>
+    <div class="fig-frame wide">
+      <svg class="flow" viewBox="0 0 1320 770" role="img" aria-label="Paved Road workflow. A central platform repository supplies pinned reusable workflows to payments-api, orders-api and 78 more repositories. Every repository passes through six stages: Develop, Pull request, Build and test, Sign and attest, Admit and release, and Operate, each listing its security controls. Findings from Operate loop back to Develop as GitHub Issues with SLAs. A control plane of OIDC credentials, central policy, risk exceptions, governance as code and a fleet report applies to every stage.">
+        <defs>
+          <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+          </marker>
+          <marker id="ah-live" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" class="dot-live"/>
+          </marker>
+        </defs>
+
+        <!-- FLEET BAND -->
+        <rect class="box-strong" x="24" y="20" width="360" height="92" rx="6"/>
+        <text class="mono t-ink" x="40" y="46" font-size="14" font-weight="600">paved-road-platform</text>
+        <text class="t-muted" x="40" y="65" font-size="11">central repo · owned by AppSec + platform team</text>
+        <text class="t-muted" x="40" y="82" font-size="11">reusable workflows · policies · fleet tooling</text>
+        <text class="t-muted" x="40" y="99" font-size="11">tagged releases · rollout rings 0 → 1 → 2</text>
+
+        <line class="wire" x1="384" y1="60" x2="554" y2="60" marker-end="url(#ah)"/>
+        <text class="mono t-ink" x="470" y="52" font-size="10.5" text-anchor="middle">uses: …@&lt;commit sha&gt;</text>
+        <text class="t-muted" x="470" y="77" font-size="10.5" text-anchor="middle">Dependabot bumps the pin</text>
+
+        <rect class="box" x="560" y="30" width="220" height="60" rx="6"/>
+        <text class="mono t-ink" x="576" y="55" font-size="13" font-weight="600">payments-api</text>
+        <text class="t-muted" x="576" y="74" font-size="10.5">Python · FastAPI · golden template</text>
+        <rect class="box" x="800" y="30" width="200" height="60" rx="6"/>
+        <text class="mono t-ink" x="816" y="55" font-size="13" font-weight="600">orders-api</text>
+        <text class="t-muted" x="816" y="74" font-size="10.5">Node.js · Express</text>
+        <rect class="box" x="1020" y="30" width="276" height="60" rx="6" stroke-dasharray="5 4"/>
+        <text class="mono t-ink" x="1036" y="55" font-size="13" font-weight="600">+78 more repos</text>
+        <text class="t-muted" x="1036" y="74" font-size="10.5">inventory.yaml · onboarded in dry-run</text>
+
+        <line class="wire-soft" x1="560" y1="104" x2="1296" y2="104"/>
+        <line class="wire-soft" x1="560" y1="98" x2="560" y2="104"/>
+        <line class="wire-soft" x1="1296" y1="98" x2="1296" y2="104"/>
+        <line class="wire" x1="760" y1="104" x2="760" y2="146" marker-end="url(#ah)"/>
+        <text class="t-muted" x="770" y="130" font-size="10.5">each repo's CI calls the same reusable gates</text>
+
+        <!-- STAGE RAIL LABELS -->
+        <text class="t-muted" x="232" y="162" font-size="10.5" text-anchor="middle">open PR</text>
+        <text class="t-muted" x="452" y="162" font-size="10.5" text-anchor="middle">merge to main</text>
+        <text class="t-muted" x="672" y="162" font-size="10.5" text-anchor="middle">all scans pass</text>
+        <text class="t-muted" x="892" y="162" font-size="10.5" text-anchor="middle">signed digest</text>
+        <text class="t-muted" x="1112" y="162" font-size="10.5" text-anchor="middle">running</text>
+
+        <!-- COLUMN 01 DEVELOP -->
+        <g>
+          <rect class="box" x="24" y="170" width="196" height="378" rx="6"/>
+          <rect class="band" x="25" y="171" width="194" height="50" rx="5"/>
+          <text class="mono t-accent" x="38" y="192" font-size="11" font-weight="600">01</text>
+          <text class="disp t-ink" x="60" y="192" font-size="14" font-weight="600">DEVELOP</text>
+          <text class="mono t-muted" x="38" y="210" font-size="10">workstation + template</text>
+          <circle class="dot-live" cx="38" cy="238" r="4"/><text class="t-ink" x="50" y="242" font-size="11" font-weight="600">Pre-commit hooks</text><text class="t-muted" x="50" y="255" font-size="10">gitleaks · Semgrep · Hadolint</text>
+          <circle class="dot-live" cx="38" cy="269" r="4"/><text class="t-ink" x="50" y="273" font-size="11" font-weight="600">Golden repo template</text><text class="t-muted" x="50" y="286" font-size="10">ci.yml · Dependabot · owners</text>
+          <circle class="dot-live" cx="38" cy="300" r="4"/><text class="t-ink" x="50" y="304" font-size="11" font-weight="600">Threat model at design</text><text class="t-muted" x="50" y="317" font-size="10">STRIDE on the pipeline</text>
+          <circle class="dot-live" cx="38" cy="331" r="4"/><text class="t-ink" x="50" y="335" font-size="11" font-weight="600">PR security checklist</text><text class="t-muted" x="50" y="348" font-size="10">PR template · SECURITY.md</text>
+          <circle class="dot-design" cx="38" cy="362" r="4"/><text class="t-ink" x="50" y="366" font-size="11" font-weight="600">IDE security linting</text><text class="t-design" x="50" y="379" font-size="10">Semgrep LSP · SonarLint</text>
+        </g>
+        <line class="wire" x1="221" y1="196" x2="242" y2="196" marker-end="url(#ah)"/>
+
+        <!-- COLUMN 02 PULL REQUEST -->
+        <g>
+          <rect class="box" x="244" y="170" width="196" height="378" rx="6"/>
+          <rect class="band" x="245" y="171" width="194" height="50" rx="5"/>
+          <text class="mono t-accent" x="258" y="192" font-size="11" font-weight="600">02</text>
+          <text class="disp t-ink" x="280" y="192" font-size="14" font-weight="600">PULL REQUEST</text>
+          <text class="mono t-muted" x="258" y="210" font-size="10">pr-security.yml</text>
+          <circle class="dot-live" cx="258" cy="238" r="4"/><text class="t-ink" x="270" y="242" font-size="11" font-weight="600">Secret scanning</text><text class="t-muted" x="270" y="255" font-size="10">push protection · gitleaks</text>
+          <circle class="dot-live" cx="258" cy="269" r="4"/><text class="t-ink" x="270" y="273" font-size="11" font-weight="600">SAST</text><text class="t-muted" x="270" y="286" font-size="10">CodeQL · Semgrep · Bandit</text>
+          <circle class="dot-live" cx="258" cy="300" r="4"/><text class="t-ink" x="270" y="304" font-size="11" font-weight="600">Dependency review</text><text class="t-muted" x="270" y="317" font-size="10">GHAS · new deps in the diff</text>
+          <circle class="dot-live" cx="258" cy="331" r="4"/><text class="t-ink" x="270" y="335" font-size="11" font-weight="600">SCA + license check</text><text class="t-muted" x="270" y="348" font-size="10">OSV-Scanner · Trivy fs</text>
+          <circle class="dot-live" cx="258" cy="362" r="4"/><text class="t-ink" x="270" y="366" font-size="11" font-weight="600">Package curation</text><text class="t-muted" x="270" y="379" font-size="10">malicious · age · license</text>
+          <circle class="dot-design" cx="258" cy="393" r="4"/><text class="t-ink" x="270" y="397" font-size="11" font-weight="600">JFrog Curation + Xray</text><text class="t-design" x="270" y="410" font-size="10">Artifactory as front door</text>
+          <circle class="dot-live" cx="258" cy="424" r="4"/><text class="t-ink" x="270" y="428" font-size="11" font-weight="600">IaC scanning</text><text class="t-muted" x="270" y="441" font-size="10">Checkov · Trivy config</text>
+          <circle class="dot-live" cx="258" cy="455" r="4"/><text class="t-ink" x="270" y="459" font-size="11" font-weight="600">Workflow security</text><text class="t-muted" x="270" y="472" font-size="10">zizmor · actionlint · SHA pins</text>
+          <circle class="dot-live" cx="258" cy="486" r="4"/><text class="t-ink" x="270" y="490" font-size="11" font-weight="600">Policy as code</text><text class="t-muted" x="270" y="503" font-size="10">Kyverno CLI on manifests</text>
+          <circle class="dot-live" cx="258" cy="517" r="4"/><text class="t-ink" x="270" y="521" font-size="11" font-weight="600">Risk exceptions</text><text class="t-muted" x="270" y="534" font-size="10">expired exception fails CI</text>
+        </g>
+        <line class="wire" x1="441" y1="196" x2="462" y2="196" marker-end="url(#ah)"/>
+
+        <!-- COLUMN 03 BUILD & TEST -->
+        <g>
+          <rect class="box" x="464" y="170" width="196" height="378" rx="6"/>
+          <rect class="band" x="465" y="171" width="194" height="50" rx="5"/>
+          <text class="mono t-accent" x="478" y="192" font-size="11" font-weight="600">03</text>
+          <text class="disp t-ink" x="500" y="192" font-size="14" font-weight="600">BUILD &amp; TEST</text>
+          <text class="mono t-muted" x="478" y="210" font-size="10">secure-build.yml</text>
+          <circle class="dot-live" cx="478" cy="238" r="4"/><text class="t-ink" x="490" y="242" font-size="11" font-weight="600">Unit tests</text><text class="t-muted" x="490" y="255" font-size="10">pytest · Jest</text>
+          <circle class="dot-live" cx="478" cy="269" r="4"/><text class="t-ink" x="490" y="273" font-size="11" font-weight="600">Dockerfile lint</text><text class="t-muted" x="490" y="286" font-size="10">Hadolint</text>
+          <circle class="dot-live" cx="478" cy="300" r="4"/><text class="t-ink" x="490" y="304" font-size="11" font-weight="600">Minimal base image</text><text class="t-muted" x="490" y="317" font-size="10">Chainguard · non-root</text>
+          <circle class="dot-live" cx="478" cy="331" r="4"/><text class="t-ink" x="490" y="335" font-size="11" font-weight="600">Push by digest</text><text class="t-muted" x="490" y="348" font-size="10">GHCR · immutable tags</text>
+          <circle class="dot-live" cx="478" cy="362" r="4"/><text class="t-ink" x="490" y="366" font-size="11" font-weight="600">Image scan</text><text class="t-muted" x="490" y="379" font-size="10">Trivy · Dockle (CIS)</text>
+          <circle class="dot-live" cx="478" cy="393" r="4"/><text class="t-ink" x="490" y="397" font-size="11" font-weight="600">DAST</text><text class="t-muted" x="490" y="410" font-size="10">OWASP ZAP on live container</text>
+        </g>
+        <line class="wire" x1="661" y1="196" x2="682" y2="196" marker-end="url(#ah)"/>
+
+        <!-- COLUMN 04 SIGN & ATTEST -->
+        <g>
+          <rect class="box" x="684" y="170" width="196" height="378" rx="6"/>
+          <rect class="band" x="685" y="171" width="194" height="50" rx="5"/>
+          <text class="mono t-accent" x="698" y="192" font-size="11" font-weight="600">04</text>
+          <text class="disp t-ink" x="720" y="192" font-size="14" font-weight="600">SIGN &amp; ATTEST</text>
+          <text class="mono t-muted" x="698" y="210" font-size="10">secure-build.yml</text>
+          <circle class="dot-live" cx="698" cy="238" r="4"/><text class="t-ink" x="710" y="242" font-size="11" font-weight="600">SBOM</text><text class="t-muted" x="710" y="255" font-size="10">Syft → CycloneDX</text>
+          <circle class="dot-live" cx="698" cy="269" r="4"/><text class="t-ink" x="710" y="273" font-size="11" font-weight="600">Keyless signature</text><text class="t-muted" x="710" y="286" font-size="10">cosign · Fulcio · Rekor</text>
+          <circle class="dot-live" cx="698" cy="300" r="4"/><text class="t-ink" x="710" y="304" font-size="11" font-weight="600">SBOM attestation</text><text class="t-muted" x="710" y="317" font-size="10">cosign attest</text>
+          <circle class="dot-live" cx="698" cy="331" r="4"/><text class="t-ink" x="710" y="335" font-size="11" font-weight="600">SLSA build provenance</text><text class="t-muted" x="710" y="348" font-size="10">attest-build-provenance</text>
+          <circle class="dot-live" cx="698" cy="362" r="4"/><text class="t-ink" x="710" y="366" font-size="11" font-weight="600">One signer identity</text><text class="t-muted" x="710" y="379" font-size="10">central secure-build.yml</text>
+          <text class="t-accent" x="698" y="420" font-size="10.5" font-style="italic">Signing runs last, so a</text>
+          <text class="t-accent" x="698" y="434" font-size="10.5" font-style="italic">signature means every gate</text>
+          <text class="t-accent" x="698" y="448" font-size="10.5" font-style="italic">passed. Unsigned means</text>
+          <text class="t-accent" x="698" y="462" font-size="10.5" font-style="italic">undeployable.</text>
+        </g>
+        <line class="wire" x1="881" y1="196" x2="902" y2="196" marker-end="url(#ah)"/>
+
+        <!-- COLUMN 05 ADMIT & RELEASE -->
+        <g>
+          <rect class="box" x="904" y="170" width="196" height="378" rx="6"/>
+          <rect class="band" x="905" y="171" width="194" height="50" rx="5"/>
+          <text class="mono t-accent" x="918" y="192" font-size="11" font-weight="600">05</text>
+          <text class="disp t-ink" x="940" y="192" font-size="14" font-weight="600">ADMIT &amp; RELEASE</text>
+          <text class="mono t-muted" x="918" y="210" font-size="10">admission + release.yml</text>
+          <circle class="dot-live" cx="918" cy="238" r="4"/><text class="t-ink" x="930" y="242" font-size="11" font-weight="600">Admission test in CI</text><text class="t-muted" x="930" y="255" font-size="10">kind cluster + Kyverno</text>
+          <circle class="dot-live" cx="918" cy="269" r="4"/><text class="t-ink" x="930" y="273" font-size="11" font-weight="600">Verify signature</text><text class="t-muted" x="930" y="286" font-size="10">only paved-road images run</text>
+          <circle class="dot-live" cx="918" cy="300" r="4"/><text class="t-ink" x="930" y="304" font-size="11" font-weight="600">Pod security</text><text class="t-muted" x="930" y="317" font-size="10">non-root · no :latest</text>
+          <circle class="dot-live" cx="918" cy="331" r="4"/><text class="t-ink" x="930" y="335" font-size="11" font-weight="600">Environments</text><text class="t-muted" x="930" y="348" font-size="10">staging → production approval</text>
+          <circle class="dot-live" cx="918" cy="362" r="4"/><text class="t-ink" x="930" y="366" font-size="11" font-weight="600">Promote by digest</text><text class="t-muted" x="930" y="379" font-size="10">attestations verified first</text>
+          <circle class="dot-design" cx="918" cy="393" r="4"/><text class="t-ink" x="930" y="397" font-size="11" font-weight="600">AWS target</text><text class="t-design" x="930" y="410" font-size="10">EKS · ECR · Terraform OIDC</text>
+        </g>
+        <line class="wire" x1="1101" y1="196" x2="1122" y2="196" marker-end="url(#ah)"/>
+
+        <!-- COLUMN 06 OPERATE -->
+        <g>
+          <rect class="box" x="1124" y="170" width="172" height="378" rx="6"/>
+          <rect class="band" x="1125" y="171" width="170" height="50" rx="5"/>
+          <text class="mono t-accent" x="1138" y="192" font-size="11" font-weight="600">06</text>
+          <text class="disp t-ink" x="1160" y="192" font-size="14" font-weight="600">OPERATE</text>
+          <text class="mono t-muted" x="1138" y="210" font-size="10">vuln-triage + scorecard</text>
+          <circle class="dot-live" cx="1138" cy="238" r="4"/><text class="t-ink" x="1150" y="242" font-size="11" font-weight="600">Vulnerability triage</text><text class="t-muted" x="1150" y="255" font-size="10">KEV + EPSS → SLA issues</text>
+          <circle class="dot-live" cx="1138" cy="269" r="4"/><text class="t-ink" x="1150" y="273" font-size="11" font-weight="600">Dependabot</text><text class="t-muted" x="1150" y="286" font-size="10">pip · npm · Docker · Actions</text>
+          <circle class="dot-live" cx="1138" cy="300" r="4"/><text class="t-ink" x="1150" y="304" font-size="11" font-weight="600">Repo posture</text><text class="t-muted" x="1150" y="317" font-size="10">OpenSSF Scorecard</text>
+          <circle class="dot-live" cx="1138" cy="331" r="4"/><text class="t-ink" x="1150" y="335" font-size="11" font-weight="600">Fleet report</text><text class="t-muted" x="1150" y="348" font-size="10">adoption · versions · drift</text>
+          <circle class="dot-design" cx="1138" cy="362" r="4"/><text class="t-ink" x="1150" y="366" font-size="11" font-weight="600">Runtime detection</text><text class="t-design" x="1150" y="379" font-size="10">Falco · Wiz</text>
+          <circle class="dot-design" cx="1138" cy="393" r="4"/><text class="t-ink" x="1150" y="397" font-size="11" font-weight="600">Security overview</text><text class="t-design" x="1150" y="410" font-size="10">campaigns · Copilot Autofix</text>
+        </g>
+
+        <!-- FEEDBACK LOOP -->
+        <path class="wire-loop" d="M1210 548 V590 H122 V554" marker-end="url(#ah-live)"/>
+        <text class="t-live" x="666" y="610" font-size="11" text-anchor="middle" font-weight="500">findings become GitHub Issues with an owner and SLA (zero-day 48h · critical 7d · high 30d); the fix PR re-enters at stage 01</text>
+
+        <!-- CONTROL PLANE -->
+        <rect class="plane" x="24" y="632" width="1272" height="84" rx="6"/>
+        <text class="disp t-ink" x="44" y="656" font-size="12.5" font-weight="600" letter-spacing="0.6">CONTROL PLANE · applies to every stage and every repo</text>
+        <rect class="chip" x="44" y="670" width="200" height="28" rx="14"/><text class="t-ink" x="144" y="688" font-size="10.5" text-anchor="middle">OIDC only · no stored secrets</text>
+        <rect class="chip" x="260" y="670" width="250" height="28" rx="14"/><text class="t-ink" x="385" y="688" font-size="10.5" text-anchor="middle">security-policy.yml · audit → enforce</text>
+        <rect class="chip" x="526" y="670" width="225" height="28" rx="14"/><text class="t-ink" x="638" y="688" font-size="10.5" text-anchor="middle">exceptions.yaml · expiry enforced</text>
+        <rect class="chip" x="767" y="670" width="245" height="28" rx="14"/><text class="t-ink" x="889" y="688" font-size="10.5" text-anchor="middle">rulesets · environments · CODEOWNERS</text>
+        <rect class="chip" x="1028" y="670" width="195" height="28" rx="14"/><text class="t-ink" x="1125" y="688" font-size="10.5" text-anchor="middle">fleet report · adoption KPIs</text>
+
+        <!-- LEGEND -->
+        <circle class="dot-live" cx="34" cy="744" r="4.5"/><text class="t-muted" x="46" y="748" font-size="10.5">runs live in the demo</text>
+        <circle class="dot-design" cx="200" cy="744" r="4.5"/><text class="t-muted" x="212" y="748" font-size="10.5">design and config only</text>
+        <line class="wire" x1="380" y1="744" x2="408" y2="744" marker-end="url(#ah)"/><text class="t-muted" x="416" y="748" font-size="10.5">promotion to the next stage; a failed gate stops the flow</text>
+        <line class="wire-loop" x1="760" y1="744" x2="788" y2="744"/><text class="t-muted" x="796" y="748" font-size="10.5">remediation loop</text>
+      </svg>
+    </div>
+    <span class="scroll-hint">Scroll sideways to see the whole diagram →</span>
+    <figcaption>Every repository in the fleet calls the same pinned workflows from the central platform repo. A change moves left to right through six stages, and a failed gate stops it. Signing happens last, so production can trust a signature as proof that every earlier control passed. Findings from operations loop back to the developer as tracked issues with deadlines.</figcaption>
+  </figure>
+</section>
+
+<!-- 2. PROBLEM AND PRINCIPLES -->
+<section id="goals">
+  <div class="sec-head"><span class="sec-num">§2</span><h2>Problem and design principles</h2></div>
+  <div class="two-col">
+    <div class="prose" style="display:grid;gap:12px">
+      <h3>The starting point this design fixes</h3>
+      <ul>
+        <li>Each team runs its own pipeline, so security coverage differs from repo to repo and often happens after development.</li>
+        <li>Builds pull packages straight from public registries, so nothing stops a malicious or typosquatted package.</li>
+        <li>No one can prove where a production image came from, or that it passed the required checks.</li>
+        <li>Findings pile up in separate tools with no owner and no deadline, so the backlog only grows.</li>
+        <li>Pipelines themselves hold long-lived cloud keys and unpinned third-party actions.</li>
+      </ul>
+    </div>
+    <div class="prose" style="display:grid;gap:12px">
+      <h3>What success looks like</h3>
+      <ul>
+        <li>Every repo in the fleet runs the same versioned security gates, with no opt-out.</li>
+        <li>Open source enters through one curated front door.</li>
+        <li>Every production image carries an SBOM, a signature and build provenance, and the cluster checks them.</li>
+        <li>Every finding has an owner, an SLA and a closure confirmed by rescan.</li>
+        <li>Pipelines use short-lived OIDC credentials and pinned actions only.</li>
+      </ul>
+    </div>
+  </div>
+  <dl class="principles">
+    <div><dt>Paved road, not toll booths</dt><dd>The secure path is the easiest path. A team gets every control by calling one workflow.</dd></div>
+    <div><dt>Shift left, verify right</dt><dd>Catch issues on the laptop and in the PR; prove integrity again at deploy.</dd></div>
+    <div><dt>Guardrails before gates</dt><dd>New rules start in audit mode, get tuned for false positives, then enforce.</dd></div>
+    <div><dt>One front door for open source</dt><dd>Packages and base images come only through curated sources.</dd></div>
+    <div><dt>Provenance by default</dt><dd>Every artifact is signed and attested. Unsigned means undeployable.</dd></div>
+    <div><dt>Central, versioned, self-service</dt><dd>Platform owns the logic; app teams consume it by pinned version.</dd></div>
+    <div><dt>Measure adoption, not activity</dt><dd>Coverage, time to fix and share of production on the paved road.</dd></div>
+  </dl>
+</section>
+
+<!-- 3. STAGE CONTROLS -->
+<section id="controls">
+  <div class="sec-head"><span class="sec-num">§3</span><h2>Controls by stage</h2></div>
+  <p class="prose">Each control lists what stops the flow and where it lives. Blocking is reserved for high-confidence, high-impact findings. Everything else reports to the Security tab and the PR, and the thresholds sit in one file, <code>security/security-policy.yml</code>, so the platform team can move a rule from audit to enforce without touching 80 repos.</p>
+  <div class="table-wrap controls">
+    <table>
+      <thead><tr><th>Control</th><th>Tools</th><th>Stops the flow when</th><th>Lives in</th><th>Status</th></tr></thead>
+      <tbody>
+        <tr class="group"><td colspan="5">01 · Develop</td></tr>
+        <tr><td>Pre-commit hooks</td><td>gitleaks, Semgrep, Hadolint, detect-private-key</td><td>A secret or flagged pattern is committed locally</td><td><code>.pre-commit-config.yaml</code></td><td><span class="pill live">Live</span></td></tr>
+        <tr><td>Golden repo template</td><td>Template repo with caller workflow, Dependabot, CODEOWNERS</td><td>Not a gate; makes the paved road the default</td><td><code>payments-api</code> (template)</td><td><span class="pill live">Live</span></td></tr>
+        <tr><td>Threat model</td><td>STRIDE model of the pipeline itself</td><td>Not a gate; drives which controls exist</td><td><code>docs/02-threat-model.md</code></td><td><span class="pill live">Live</span></td></tr>
+        <tr><td>IDE security linting</td><td>Semgrep LSP, SonarLint</td><td>Advisory only</td><td><code>docs/paved-road-guide.md</code></td><td><span class="pill design">Design</span></td></tr>
+        <tr class="group"><td colspan="5">02 · Pull request (pr-security.yml, all jobs in parallel, target under 10 minutes)</td></tr>
+        <tr><td>Secret scanning</td><td>GHAS secret scanning with push protection; gitleaks over full history</td><td>Any secret is detected</td><td>Repo settings, <code>pr-security.yml</code></td><td><span class="pill live">Live</span></td></tr>
+        <tr><td>SAST</td><td>CodeQL (<code>security-extended</code>), Semgrep with custom org rules, Bandit</td><td>New high or critical finding</td><td><code>pr-security.yml</code>, <code>security/semgrep/</code></td><td><span class="pill live">Live</span></td></tr>
+        <tr><td>Dependency review</td><td>GHAS dependency review action</td><td>New dependency with a high or critical CVE, or a license outside the allowlist</td><td><code>pr-security.yml</code></td><td><span class="pill live">Live</span></td></tr>
+        <tr><td>SCA and licenses</td><td>OSV-Scanner, Trivy filesystem scan</td><td>Fixable high or critical CVE anywhere in the dependency tree</td><td><code>pr-security.yml</code></td><td><span class="pill live">Live</span></td></tr>
+        <tr><td>Package curation</td><td><code>curation_check.py</code>: OSV malicious-package advisories, minimum release age, license allowlist</td><td>Known-malicious package, release younger than 7 days, or banned license</td><td><code>scripts/curation_check.py</code></td><td><span class="pill live">Live</span></td></tr>
+        <tr><td>Enterprise curation</td><td>JFrog Artifactory virtual repos, Curation, Xray watches</td><td>Package blocked at download; Xray policy fails the build</td><td><code>policies/jfrog/</code></td><td><span class="pill design">Design</span></td></tr>
+        <tr><td>IaC scanning</td><td>Checkov, Trivy config on Terraform, Kubernetes and Dockerfiles</td><td>High-severity misconfiguration</td><td><code>pr-security.yml</code></td><td><span class="pill live">Live</span></td></tr>
+        <tr><td>Workflow security</td><td>zizmor, actionlint, check that every action is pinned to a commit</td><td>Script injection risk, excessive token permissions, unpinned action</td><td><code>pr-security.yml</code></td><td><span class="pill live">Live</span></td></tr>
+        <tr><td>Policy as code</td><td>Kyverno CLI applies the cluster policies to the manifests in the PR</td><td>Manifest would be rejected at deploy (privileged, root, <code>:latest</code>)</td><td><code>policies/kyverno/</code></td><td><span class="pill live">Live</span></td></tr>
+        <tr><td>Risk exceptions</td><td><code>check_exceptions.py</code> reads <code>security/exceptions.yaml</code></td><td>An exception has passed its expiry date</td><td><code>security/exceptions.yaml</code></td><td><span class="pill live">Live</span></td></tr>
+        <tr class="group"><td colspan="5">03 · Build and test (secure-build.yml)</td></tr>
+        <tr><td>Unit tests</td><td>pytest, Jest</td><td>Any test fails</td><td><code>secure-build.yml</code></td><td><span class="pill live">Live</span></td></tr>
+        <tr><td>Dockerfile lint</td><td>Hadolint</td><td>Error-level rule, such as running as root or unpinned base</td><td><code>secure-build.yml</code></td><td><span class="pill live">Live</span></td></tr>
+        <tr><td>Minimal base image</td><td>Chainguard Python and Node images, multi-stage, <code>USER nonroot</code></td><td>Enforced by Hadolint, Dockle and Kyverno</td><td><code>Dockerfile</code></td><td><span class="pill live">Live</span></td></tr>
+        <tr><td>Push by digest</td><td>GHCR with tags derived from the commit SHA</td><td>Not a gate; the digest is what later stages scan and sign</td><td><code>secure-build.yml</code></td><td><span class="pill live">Live</span></td></tr>
+        <tr><td>Image scan</td><td>Trivy (CVEs), Dockle (CIS Docker benchmark)</td><td>Fixable high or critical CVE; Dockle fatal</td><td><code>secure-build.yml</code></td><td><span class="pill live">Live</span></td></tr>
+        <tr><td>DAST</td><td>OWASP ZAP API scan against the built image running as a service container</td><td>High-risk alert not listed in the ZAP rules file</td><td><code>secure-build.yml</code>, <code>security/zap-rules.tsv</code></td><td><span class="pill live">Live</span></td></tr>
+        <tr class="group"><td colspan="5">04 · Sign and attest (secure-build.yml, runs only after every gate above passed)</td></tr>
+        <tr><td>SBOM</td><td>Syft, CycloneDX JSON</td><td>Not a gate; feeds attestation and incident lookups</td><td><code>secure-build.yml</code></td><td><span class="pill live">Live</span></td></tr>
+        <tr><td>Keyless signature</td><td>cosign with Sigstore Fulcio and Rekor, using the job's OIDC token</td><td>Signing fails, so the image stays undeployable</td><td><code>secure-build.yml</code></td><td><span class="pill live">Live</span></td></tr>
+        <tr><td>SBOM attestation and SLSA provenance</td><td><code>cosign attest</code>, <code>actions/attest-build-provenance</code></td><td>Attestation fails, so promotion is refused later</td><td><code>secure-build.yml</code></td><td><span class="pill live">Live</span></td></tr>
+        <tr class="group"><td colspan="5">05 · Admit and release (admission-test.yml, release.yml)</td></tr>
+        <tr><td>Admission test in CI</td><td>Throwaway kind cluster with Kyverno inside the runner</td><td>Signed image is denied, or an unsigned control image is admitted</td><td><code>admission-test.yml</code></td><td><span class="pill live">Live</span></td></tr>
+        <tr><td>Signature and pod policy</td><td>Kyverno <code>verifyImages</code>, approved registry, non-root, read-only root filesystem, no <code>:latest</code></td><td>Image not signed by the central workflow, or pod breaks policy</td><td><code>policies/kyverno/</code></td><td><span class="pill live">Live</span></td></tr>
+        <tr><td>Environments and promotion</td><td>GitHub environments (staging, production) with required reviewers; <code>gh attestation verify</code>; copy by digest</td><td>Missing approval or attestation check fails</td><td><code>release.yml</code></td><td><span class="pill live">Live</span></td></tr>
+        <tr><td>AWS production target</td><td>Terraform: OIDC role for GitHub, ECR with immutable tags and scan on push, KMS, EKS</td><td>Not applied; scanned by Checkov in stage 02</td><td><code>infra/terraform/</code></td><td><span class="pill design">Design</span></td></tr>
+        <tr class="group"><td colspan="5">06 · Operate (vuln-triage.yml daily, scorecard.yml weekly)</td></tr>
+        <tr><td>Vulnerability triage</td><td><code>vuln_triage.py</code>: code scanning and Dependabot alerts, CISA KEV, FIRST EPSS</td><td>Opens or updates a GitHub Issue with owner, priority and SLA due date</td><td><code>scripts/vuln_triage.py</code></td><td><span class="pill live">Live</span></td></tr>
+        <tr><td>Dependency updates</td><td>Dependabot for pip, npm, Docker and GitHub Actions, grouped</td><td>Not a gate; opens upgrade PRs that pass through stage 02</td><td><code>.github/dependabot.yml</code></td><td><span class="pill live">Live</span></td></tr>
+        <tr><td>Repo posture</td><td>OpenSSF Scorecard</td><td>Reports to the Security tab</td><td><code>scorecard.yml</code></td><td><span class="pill live">Live</span></td></tr>
+        <tr><td>Fleet compliance</td><td><code>compliance_report.py</code> across the inventory</td><td>Flags repos off the paved road or behind on version</td><td><code>fleet/</code></td><td><span class="pill live">Live</span></td></tr>
+        <tr><td>Runtime detection</td><td>Falco on EKS, Wiz posture and runtime</td><td>Alerts, not blocks</td><td><code>docs/01-architecture.md</code></td><td><span class="pill design">Design</span></td></tr>
+        <tr><td>Org-level GHAS features</td><td>Security campaigns, Copilot Autofix</td><td>Need a Code Security license</td><td><code>docs/01-architecture.md</code></td><td><span class="pill design">Design</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- 4. TRUST CHAIN -->
+<section id="trust">
+  <div class="sec-head"><span class="sec-num">§4</span><h2>How the cluster knows an image came through the paved road</h2></div>
+  <figure>
+    <div class="fig-frame mid">
+      <svg class="flow" viewBox="0 0 1040 200" role="img" aria-label="Signing trust chain. The central secure-build workflow requests a GitHub OIDC token whose job_workflow_ref claim names that workflow. Sigstore Fulcio exchanges it for a short-lived certificate bound to that identity. The signature, SBOM and provenance are stored in GHCR against the image digest and logged in Rekor. Kyverno admits a pod only if the issuer and subject match the central workflow; images built anywhere else are denied.">
+        <defs>
+          <marker id="ah2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+          </marker>
+        </defs>
+        <text class="t-muted" x="209" y="48" font-size="10.5" text-anchor="middle">requests</text>
+        <text class="t-muted" x="416" y="48" font-size="10.5" text-anchor="middle">exchanged</text>
+        <text class="t-muted" x="623" y="48" font-size="10.5" text-anchor="middle">signs + logs</text>
+        <text class="t-muted" x="830" y="48" font-size="10.5" text-anchor="middle">checked at deploy</text>
+
+        <rect class="box-strong" x="20" y="56" width="172" height="72" rx="6"/>
+        <text class="mono t-ink" x="34" y="82" font-size="12" font-weight="600">secure-build.yml</text>
+        <text class="t-muted" x="34" y="100" font-size="10.5">central workflow, runs in</text>
+        <text class="t-muted" x="34" y="116" font-size="10.5">each app repo's CI</text>
+        <line class="wire" x1="193" y1="92" x2="225" y2="92" marker-end="url(#ah2)"/>
+
+        <rect class="box" x="227" y="56" width="172" height="72" rx="6"/>
+        <text class="t-ink" x="241" y="82" font-size="12" font-weight="600">GitHub OIDC token</text>
+        <text class="t-muted" x="241" y="100" font-size="10.5">claim job_workflow_ref =</text>
+        <text class="mono t-muted" x="241" y="116" font-size="10">…/secure-build.yml@sha</text>
+        <line class="wire" x1="400" y1="92" x2="432" y2="92" marker-end="url(#ah2)"/>
+
+        <rect class="box" x="434" y="56" width="172" height="72" rx="6"/>
+        <text class="t-ink" x="448" y="82" font-size="12" font-weight="600">Sigstore Fulcio</text>
+        <text class="t-muted" x="448" y="100" font-size="10.5">short-lived certificate</text>
+        <text class="t-muted" x="448" y="116" font-size="10.5">bound to that identity</text>
+        <line class="wire" x1="607" y1="92" x2="639" y2="92" marker-end="url(#ah2)"/>
+
+        <rect class="box" x="641" y="56" width="172" height="72" rx="6"/>
+        <text class="t-ink" x="655" y="82" font-size="12" font-weight="600">GHCR + Rekor</text>
+        <text class="t-muted" x="655" y="100" font-size="10.5">signature, SBOM and</text>
+        <text class="t-muted" x="655" y="116" font-size="10.5">provenance on the digest</text>
+        <line class="wire" x1="814" y1="92" x2="846" y2="92" marker-end="url(#ah2)"/>
+
+        <rect class="box-strong" x="848" y="56" width="172" height="72" rx="6"/>
+        <text class="t-ink" x="862" y="82" font-size="12" font-weight="600">Kyverno verifyImages</text>
+        <text class="t-muted" x="862" y="100" font-size="10.5">issuer + subject must</text>
+        <text class="t-muted" x="862" y="116" font-size="10.5">match the central workflow</text>
+
+        <text class="t-muted" x="20" y="158" font-size="10.5">No signing keys exist to store, rotate or leak.</text>
+        <text class="t-live" x="1020" y="158" font-size="11" font-weight="600" text-anchor="end">✓ built by the paved road → admitted</text>
+        <text class="t-deny" x="1020" y="180" font-size="11" font-weight="600" text-anchor="end">✗ built anywhere else → denied</text>
+      </svg>
+    </div>
+    <span class="scroll-hint">Scroll sideways to see the whole diagram →</span>
+    <figcaption>Because the signing identity is the central workflow and not the app repo, one Kyverno policy covers all 80 repositories. A developer who builds an image on a laptop, or in a pipeline that skipped the gates, cannot deploy it.</figcaption>
+  </figure>
+  <p class="note ok prose">This is why reusable workflows beat composite actions here. A reusable workflow owns its whole job, including the runner and token permissions, and its name appears in the OIDC token. A composite action runs inside the caller's job, so the caller could change what happens around it.</p>
+</section>
+
+<!-- 5. FLEET -->
+<section id="fleet">
+  <div class="sec-head"><span class="sec-num">§5</span><h2>Running it across about 80 repositories</h2></div>
+  <div class="table-wrap fleet">
+    <table>
+      <thead><tr><th>Concern</th><th>Design</th><th>Status</th></tr></thead>
+      <tbody>
+        <tr><td class="stage">Where logic lives</td><td>All security logic sits in <code>paved-road-platform</code>. App repos contain a short caller file and nothing else security-related.</td><td><span class="pill live">Live</span></td></tr>
+        <tr><td class="stage">Versioning</td><td>Tagged releases (<code>v1.2.0</code>). App repos pin to a full commit SHA; Dependabot opens the upgrade PR when a new release ships.</td><td><span class="pill live">Live</span></td></tr>
+        <tr><td class="stage">Safe rollout</td><td>Rings recorded in <code>fleet/inventory.yaml</code>: ring 0 is the platform's own test repos, ring 1 is about 5 pilot repos, ring 2 is everyone. A change reaches ring 2 only after a clean week in ring 1.</td><td><span class="pill live">Live</span></td></tr>
+        <tr><td class="stage">Onboarding</td><td><code>fleet/onboard.py</code> opens an onboarding PR in each repo (caller workflow, Dependabot, CODEOWNERS), creates environments, applies branch rules, and turns on secret scanning with push protection. Dry-run by default.</td><td><span class="pill live">Live on 2 repos</span><br><span class="pill design">Dry-run on 78</span></td></tr>
+        <tr><td class="stage">Environments</td><td><code>release.yml</code> takes the environment as an input. Staging and production exist in every repo, created through the API, with required reviewers and deploys from <code>main</code> only.</td><td><span class="pill live">Live</span></td></tr>
+        <tr><td class="stage">Credentials</td><td>OIDC only. The org's token subject is customized to include <code>job_workflow_ref</code>, so in AWS the deploy role trusts only the production environment and only the central release workflow.</td><td><span class="pill live">OIDC subject live</span><br><span class="pill design">AWS role design</span></td></tr>
+        <tr><td class="stage">One policy for all</td><td>Kyverno trusts a single signer identity, so adding repo 81 needs no policy change.</td><td><span class="pill live">Live</span></td></tr>
+        <tr><td class="stage">Visibility</td><td><code>fleet/compliance_report.py</code> reports per repo: calls the paved road, pinned version, branch rules on, secret scanning on. This is the adoption KPI for leadership.</td><td><span class="pill live">Live</span></td></tr>
+        <tr><td class="stage">Org governance as code</td><td>GitHub Team plan, applied by <code>governance/apply_governance.py</code>: teams for CODEOWNERS; custom properties (<code>paved-road</code>, <code>ring</code>, <code>risk-tier</code>); the <code>paved-road-baseline</code> security configuration enforced on every repo; an Actions allowlist with SHA pinning required; and an org ruleset that targets every repo with <code>paved-road=true</code>, requires <code>pr-security / gate</code> and blocks merges on high CodeQL alerts. Onboarding repo 81 means setting its properties.</td><td><span class="pill live">Live</span></td></tr>
+        <tr><td class="stage">Runner capacity</td><td>Path filters, caching and concurrency groups keep 80 repos within budget. At scale, ephemeral self-hosted runners with Actions Runner Controller on EKS, in runner groups by trust level.</td><td><span class="pill design">Design</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- 6. REPOS -->
+<section id="repos">
+  <div class="sec-head"><span class="sec-num">§6</span><h2>Repositories and layout</h2></div>
+  <p class="prose">Local folder: <code>~/Documents/ai-project/07-paved-road-secure-supply-chain/</code>, opened in VS Code as one workspace.</p>
+  <div class="repos">
+    <div>
+      <h3>paved-road-platform</h3>
+      <p>Central repo, owned by AppSec and the platform team.</p>
+<pre>.github/workflows/
+  pr-security.yml      reusable
+  secure-build.yml     reusable
+  admission-test.yml   reusable
+  release.yml          reusable
+  vuln-triage.yml      scheduled
+  scorecard.yml        scheduled
+security/
+  security-policy.yml  thresholds, audit/enforce
+  exceptions.yaml      with expiry dates
+  semgrep/             custom org rules
+  licenses.yaml        allowlist
+  zap-rules.tsv
+policies/
+  kyverno/             verify, registry, pod rules
+  jfrog/               design: repos, Curation, Xray
+governance/            rulesets, environments (JSON)
+infra/terraform/       design: OIDC role, ECR, KMS
+fleet/                 inventory, onboard, report
+scripts/               curation, triage, exceptions,
+                       demo.sh, verify.sh
+docs/                  architecture, threat model,
+                       procedure, demo script,
+                       roadmap, standards, runbooks,
+                       adr/</pre>
+    </div>
+    <div>
+      <h3>payments-api</h3>
+      <p>Python FastAPI service. Also the golden template repo.</p>
+<pre>app/                 FastAPI service
+tests/               pytest
+requirements.txt     hash-pinned
+Dockerfile           Chainguard, non-root
+deploy/k8s/          Deployment
+.github/
+  workflows/ci.yml   ~20-line caller
+  dependabot.yml
+  CODEOWNERS
+  pull_request_template.md
+.pre-commit-config.yaml
+SECURITY.md</pre>
+    </div>
+    <div>
+      <h3>orders-api</h3>
+      <p>Node.js Express service. Same central workflows, second ecosystem.</p>
+<pre>src/                 Express service
+test/                Jest
+package-lock.json    committed, npm ci
+Dockerfile           Chainguard, non-root
+deploy/k8s/          Deployment
+.github/
+  workflows/ci.yml   ~20-line caller
+  dependabot.yml
+  CODEOWNERS
+.pre-commit-config.yaml
+SECURITY.md</pre>
+    </div>
+  </div>
+</section>
+
+<!-- 7. COVERAGE -->
+<section id="coverage">
+  <div class="sec-head"><span class="sec-num">§7</span><h2>Job description coverage</h2></div>
+  <div class="table-wrap cov">
+    <table>
+      <thead><tr><th>Requirement in the job description</th><th>Where this design answers it</th><th>Status</th></tr></thead>
+      <tbody>
+        <tr><td>Lead AppSec strategy, architecture, design and implementation</td><td>This document, ADRs, roadmap, and the working platform</td><td><span class="pill live">Live</span></td></tr>
+        <tr><td>Embed security controls into CI/CD and developer workflows</td><td>Pre-commit hooks, <code>pr-security.yml</code>, <code>secure-build.yml</code>, results in the PR</td><td><span class="pill live">Live</span></td></tr>
+        <tr><td>Design security capabilities in GitHub Actions</td><td>Central reusable workflows, versioned and pinned, least-privilege tokens, OIDC</td><td><span class="pill live">Live</span></td></tr>
+        <tr><td>GHAS: code scanning, secret scanning, dependency analysis</td><td>CodeQL, push protection, dependency review, Dependabot</td><td><span class="pill live">Live</span></td></tr>
+        <tr><td>Software Composition Analysis</td><td>OSV-Scanner, Trivy, license allowlist, SBOM</td><td><span class="pill live">Live</span></td></tr>
+        <tr><td>SAST and DAST</td><td>CodeQL, Semgrep, Bandit; OWASP ZAP against the running container</td><td><span class="pill live">Live</span></td></tr>
+        <tr><td>Secure artifact management</td><td>GHCR by digest with immutable tags; Artifactory repo design</td><td><span class="pill live">Live</span> <span class="pill design">Design</span></td></tr>
+        <tr><td>Dependency governance, package curation, trusted open source</td><td><code>curation_check.py</code>, hash-pinned installs, dependency review; JFrog Curation design</td><td><span class="pill live">Live</span> <span class="pill design">Design</span></td></tr>
+        <tr><td>Block vulnerable, malicious or unapproved dependencies</td><td>Curation check, dependency review, SCA gates, exceptions with expiry</td><td><span class="pill live">Live</span></td></tr>
+        <tr><td>Supply-chain and container security architecture</td><td>Chainguard base, Hadolint, Trivy, Dockle, SBOM, signing, provenance, Kyverno</td><td><span class="pill live">Live</span></td></tr>
+        <tr><td>Evaluate JFrog and Chainguard</td><td>ADRs with a weighted scorecard and proof-of-concept plan; Chainguard used live</td><td><span class="pill live">Live</span> <span class="pill design">Design</span></td></tr>
+        <tr><td>Reusable patterns, standards and guardrails</td><td>Central repo, <code>security-policy.yml</code>, golden template, Kyverno policies</td><td><span class="pill live">Live</span></td></tr>
+        <tr><td>AppSec evangelism and developer adoption</td><td>Paved-road guide, PR template, onboarding script, adoption report, demo script</td><td><span class="pill live">Live</span></td></tr>
+        <tr><td>Troubleshoot complex AppSec and CI/CD integrations</td><td>Procedure document, three runbooks, admission test in CI</td><td><span class="pill live">Live</span></td></tr>
+        <tr><td>Large enterprise environment</td><td>Fleet tooling for 80 repos, rollout rings, single signer identity</td><td><span class="pill live">Live</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- 8. PROCEDURE -->
+<section id="procedure">
+  <div class="sec-head"><span class="sec-num">§8</span><h2>Build procedure</h2></div>
+  <p class="prose">The order protects the core path. If time runs short, later items stay as finished files without a live run, and the coverage matrix in the repo says so.</p>
+  <ol class="steps prose">
+    <li><h3>Setup</h3><ul>
+      <li>Create the project folder and the three local repositories.</li>
+      <li>Install kind, cosign, syft, trivy and helm with Homebrew. Start Docker Desktop.</li>
+      <li>Create the <code>triorex</code> GitHub organization and log in with <code>gh auth login</code> (scopes: <code>admin:org</code>, <code>workflow</code>, <code>write:packages</code>).</li>
+      <li>Write the approved plan into <code>docs/PLAN.md</code> and open VS Code.</li></ul></li>
+    <li><h3>Platform repo</h3><ul>
+      <li>Security config: policy thresholds, exceptions, Semgrep rules, license allowlist, ZAP rules.</li>
+      <li>Reusable workflows: <code>pr-security.yml</code>, <code>secure-build.yml</code>, <code>admission-test.yml</code>, <code>release.yml</code>.</li>
+      <li>Kyverno policies and the scripts: curation, exceptions, triage, demo, verify.</li></ul></li>
+    <li><h3>Consumer repos</h3><ul>
+      <li><code>payments-api</code>: FastAPI service, tests, hash-pinned requirements, Chainguard Dockerfile, caller workflow.</li>
+      <li><code>orders-api</code>: Express service, Jest tests, lockfile, Chainguard Dockerfile, caller workflow.</li></ul></li>
+    <li><h3>Publish</h3><ul>
+      <li>Create the three public repos in the org and push.</li>
+      <li>Apply governance: secret scanning with push protection, Dependabot, branch rules, environments, allowed-actions policy.</li></ul></li>
+    <li><h3>First green run</h3><ul>
+      <li>Open a PR and watch every gate pass. Merge to build, scan, run DAST, generate the SBOM, sign and attest.</li>
+      <li>Check the result with <code>cosign verify</code> and <code>gh attestation verify</code>.</li></ul></li>
+    <li><h3>Admission</h3><ul>
+      <li>CI: the admission test admits the signed image and denies an unsigned one.</li>
+      <li>Laptop: the same demo on a local kind cluster.</li></ul></li>
+    <li><h3>Release and operate</h3><ul>
+      <li>Promote staging to production with approval and attestation checks.</li>
+      <li>Run triage, Scorecard, fleet onboarding (live on 2, dry-run on 78) and the compliance report.</li></ul></li>
+    <li><h3>Docs and walkthrough</h3><ul>
+      <li>Architecture, threat model, procedure, demo script, roadmap, standards mapping, runbooks and ADRs.</li>
+      <li>Walk through the 10-minute demo script.</li></ul></li>
+  </ol>
+  <div class="two-col">
+    <div style="display:grid;gap:10px">
+      <h3>Demo pull requests</h3>
+      <ol>
+        <li>Add a known-vulnerable package: dependency review and OSV block it.</li>
+        <li>Add a SQL injection: CodeQL and Semgrep flag it.</li>
+        <li>Hardcode a test secret: gitleaks blocks it.</li>
+        <li>Make the pod privileged: the Kyverno CLI blocks the manifest.</li>
+      </ol>
+    </div>
+    <div style="display:grid;gap:10px">
+      <h3>What you need from the GitHub side</h3>
+      <ul>
+        <li>The <code>triorex</code> organization.</li>
+        <li>Public repos, so GHAS code scanning, secret scanning and dependency review run at no cost.</li>
+        <li>GHCR packages set to public, or pull credentials added to the local kind cluster.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- 9. DESIGN ONLY -->
+<section id="design-only">
+  <div class="sec-head"><span class="sec-num">§9</span><h2>Design-only components and why</h2></div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Component</th><th>Reason it is not live</th><th>What exists instead</th></tr></thead>
+      <tbody>
+        <tr><td>JFrog Artifactory, Curation, Xray</td><td>Needs a paid or trial JFrog tenant</td><td>Repo layout and policies as code, workflow steps behind an off-by-default flag, live <code>curation_check.py</code></td></tr>
+        <tr><td>AWS: EKS, ECR, OIDC role, KMS</td><td>No AWS account wired up for the demo</td><td>Terraform module scanned by Checkov in every PR; GHCR and kind stand in</td></tr>
+        <tr><td>Runtime detection (Falco, Wiz)</td><td>Needs a long-running cluster</td><td>Architecture section and alert-routing design</td></tr>
+        <tr><td>Ruleset rule that requires the central workflow, security campaigns, Copilot Autofix</td><td>Need GitHub Enterprise or a Code Security license</td><td>The org ruleset requires the <code>pr-security / gate</code> check instead; Autofix and campaigns documented as target state</td></tr>
+        <tr><td>Self-hosted runners (Actions Runner Controller)</td><td>Needs a cluster and cloud capacity</td><td>Runner group and trust-level design</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- 10. RISKS & METRICS -->
+<section id="risks">
+  <div class="sec-head"><span class="sec-num">§10</span><h2>Risks, trade-offs and success metrics</h2></div>
+  <div class="two-col">
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Risk</th><th>Mitigation</th></tr></thead>
+        <tbody>
+          <tr><td>Developers push back on new gates</td><td>Audit mode first, tuned rules, results in the PR, a clear exception path</td></tr>
+          <tr><td>Central workflow breaks 80 repos at once</td><td>Pinned SHAs, rollout rings, a test matrix of sample repos, documented break-glass</td></tr>
+          <tr><td>Curation blocks a package a team needs today</td><td>Fast-track approval and time-bound exceptions</td></tr>
+          <tr><td>Sigstore outage blocks deploys</td><td>Break-glass with audit trail; private Sigstore or key-based signing for critical paths</td></tr>
+          <tr><td>Pipeline time grows with each tool</td><td>Parallel jobs, path filters, caching, heavy scans moved to main or nightly</td></tr>
+          <tr><td>Duplicate findings across tools</td><td>SARIF into one Security tab and one triage queue; retire overlapping scanners</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Metric</th><th>Target</th></tr></thead>
+        <tbody>
+          <tr><td>Repos on the paved road</td><td>90% or more of active repos</td></tr>
+          <tr><td>Time to remediate</td><td>Within SLA: 48 hours, 7 days, 30 days</td></tr>
+          <tr><td>SLA compliance</td><td>95% critical, 90% high</td></tr>
+          <tr><td>Production images signed and verified</td><td>100%</td></tr>
+          <tr><td>Supply-chain events blocked</td><td>Reported monthly</td></tr>
+          <tr><td>False-positive rate on blocking rules</td><td>Under 10%</td></tr>
+          <tr><td>PR security check time</td><td>Under 10 minutes</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<footer>
+  Paved Road design document, v1.0. Standards referenced: NIST SSDF (SP 800-218), SLSA v1.0 build levels, OWASP SAMM, CIS Software Supply Chain Security Guide. Tool versions are pinned in the workflows themselves.
+</footer>
+
+</div>

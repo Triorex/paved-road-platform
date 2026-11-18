@@ -1,0 +1,80 @@
+# Paved Road · release (reusable)
+#
+# Promotes one immutable digest into an environment. Called once per environment by the app repo
+# (staging, then production). The environment's protection rules (required reviewers, main-only
+# deployments) live on the calling repo and are created by fleet/onboard.py.
+# Before anything is promoted, the signature AND the SLSA provenance are re-verified against the
+# central workflow identity, so nothing that bypassed the paved road can reach an environment.
+name: release
+
+on:
+  workflow_call:
+    inputs:
+      image:
+        type: string
+        required: true
+      digest:
+        type: string
+        required: true
+      environment:
+        description: staging | production
+        type: string
+        required: true
+
+permissions: {}
+
+env:
+  COSIGN_VERSION: v2.6.4
+  SIGNER_REGEX: ^https://github\.com/[Tt]riorex/paved-road-platform/\.github/workflows/secure-build\.yml@.+$
+  SIGNER_WORKFLOW: Triorex/paved-road-platform/.github/workflows/secure-build.yml
+  OIDC_ISSUER: https://token.actions.githubusercontent.com
+
+jobs:
+  promote:
+    name: promote to ${{ inputs.environment }}
+    runs-on: ubuntu-24.04
+    environment:
+      name: ${{ inputs.environment }}
+    permissions:
+      contents: read
+      packages: write # add the environment tag
+      attestations: read
+    env:
+      IMAGE: ${{ inputs.image }}
+      DIGEST: ${{ inputs.digest }}
+      TARGET_ENV: ${{ inputs.environment }}
+    steps:
+      - uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+        with:
+          egress-policy: audit
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: ${{ env.COSIGN_VERSION }}
+      - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Verify signature and SBOM attestation (Sigstore)
+        run: |
+          set -euo pipefail
+          cosign verify "$IMAGE@$DIGEST" \
+            --certificate-identity-regexp "$SIGNER_REGEX" --certificate-oidc-issuer "$OIDC_ISSUER" > /dev/null
+          cosign verify-attestation "$IMAGE@$DIGEST" --type cyclonedx \
+            --certificate-identity-regexp "$SIGNER_REGEX" --certificate-oidc-issuer "$OIDC_ISSUER" > /dev/null
+          echo "signature and SBOM attestation verified"
+      - name: Verify SLSA provenance (GitHub artifact attestation)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OWNER: ${{ github.repository_owner }}
+        run: gh attestation verify "oci://$IMAGE@$DIGEST" --owner "$OWNER" --signer-workflow "$SIGNER_WORKFLOW"
+      - name: Promote by digest (no rebuild)
+        run: docker buildx imagetools create --tag "$IMAGE:$TARGET_ENV" "$IMAGE@$DIGEST"
+      - name: Summary
+        run: |
+          {
+            echo "## Promoted to \`$TARGET_ENV\`"
+            echo "- Digest: \`$DIGEST\`"
+            echo "- Verified: keyless signature, CycloneDX SBOM attestation, SLSA provenance"
+            echo "- Tag \`$IMAGE:$TARGET_ENV\` now points at this digest"
+          } >> "$GITHUB_STEP_SUMMARY"

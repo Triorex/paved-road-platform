@@ -1,0 +1,115 @@
+# Paved Road · admission test (reusable)
+#
+# Proves, on every main build, that the cluster policy does what we claim:
+#   1. the freshly signed image IS admitted
+#   2. an image pushed to the same registry WITHOUT a paved-road signature is DENIED
+#   3. a non-compliant manifest (privileged, root) is DENIED
+# It runs in a throwaway kind cluster inside the runner, so it needs no shared infrastructure.
+name: admission-test
+
+on:
+  workflow_call:
+    inputs:
+      image:
+        type: string
+        required: true
+      digest:
+        type: string
+        required: true
+      container-port:
+        type: number
+        default: 8080
+      platform-ref:
+        type: string
+        default: main
+
+permissions: {}
+
+env:
+  KYVERNO_CHART: 3.9.2 # app v1.19.2
+  CANARY_BASE: cgr.dev/chainguard/static@sha256:fc42af33e643f20d08baf03cddcc1c02ba57052dfb02edb0d79f3fc47bcea8d9
+
+jobs:
+  admission:
+    name: admission (kind + kyverno)
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write # push the unsigned canary image
+      id-token: write # locate the platform commit
+    env:
+      IMAGE: ${{ inputs.image }}
+      DIGEST: ${{ inputs.digest }}
+      PORT: ${{ inputs.container-port }}
+    steps:
+      - uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+        with:
+          egress-policy: audit
+      - name: Locate the platform commit this workflow runs from
+        id: locate
+        env:
+          FALLBACK_REF: ${{ inputs.platform-ref }}
+        run: |
+          set -euo pipefail
+          repo="Triorex/paved-road-platform"; sha="$FALLBACK_REF"
+          if [ -n "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ]; then
+            jwt=$(curl -sSf -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+                  "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=paved-road-platform" | jq -r .value)
+            payload=$(printf '%s' "$jwt" | cut -d. -f2 | tr '_-' '/+')
+            while [ $(( ${#payload} % 4 )) -ne 0 ]; do payload="${payload}="; done
+            claims=$(printf '%s' "$payload" | base64 -d)
+            sha=$(jq -r '.job_workflow_sha' <<<"$claims")
+            repo=$(jq -r '.job_workflow_ref' <<<"$claims" | cut -d/ -f1-2)
+          fi
+          echo "repo=$repo" >> "$GITHUB_OUTPUT"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ steps.locate.outputs.repo }}
+          ref: ${{ steps.locate.outputs.sha }}
+          path: .platform
+          persist-credentials: false
+      - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Push an UNSIGNED canary image to the same registry
+        id: canary
+        env:
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          canary="ghcr.io/${OWNER,,}/admission-canary:unsigned-${GITHUB_SHA::12}"
+          printf 'FROM %s\nUSER 65532\n' "$CANARY_BASE" | docker build -t "$canary" -
+          docker push "$canary"
+          echo "ref=$(docker inspect --format '{{index .RepoDigests 0}}' "$canary")" >> "$GITHUB_OUTPUT"
+      - uses: helm/kind-action@1544676c07bb3570fcb70166beaa07c4528fd4aa # v1.15.1
+        with:
+          cluster_name: paved-road
+          wait: 120s
+      - name: Install Kyverno (registry credentials so it can read signatures)
+        env:
+          GH_ACTOR: ${{ github.actor }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          kubectl create namespace kyverno
+          kubectl -n kyverno create secret docker-registry ghcr \
+            --docker-server=ghcr.io --docker-username="$GH_ACTOR" --docker-password="$GH_TOKEN"
+          helm install kyverno kyverno --repo https://kyverno.github.io/kyverno --version "$KYVERNO_CHART" \
+            -n kyverno --wait --timeout 5m \
+            --set 'existingImagePullSecrets[0]=ghcr' \
+            --set admissionController.replicas=1 \
+            --set backgroundController.enabled=false \
+            --set cleanupController.enabled=false \
+            --set reportsController.enabled=false
+          kubectl apply -f .platform/policies/kyverno/admission/ -f .platform/policies/kyverno/workload/
+          kubectl wait --for=condition=Ready clusterpolicy --all --timeout=120s
+          kubectl create namespace paved-road-demo
+          kubectl label namespace paved-road-demo paved-road.triorex.io/enforce=true
+          kubectl -n paved-road-demo create secret docker-registry ghcr \
+            --docker-server=ghcr.io --docker-username="$GH_ACTOR" --docker-password="$GH_TOKEN"
+      - name: Run admission cases
+        env:
+          CANARY: ${{ steps.canary.outputs.ref }}
+        run: bash .platform/scripts/admission_cases.sh "$IMAGE@$DIGEST" "$CANARY" "$PORT"

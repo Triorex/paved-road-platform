@@ -1,0 +1,76 @@
+# Paved Road · vulnerability triage (reusable, scheduled by each app repo)
+#
+# Open scanner alerts -> CISA KEV + EPSS enrichment -> one GitHub Issue per finding with a priority,
+# an SLA due date from security-policy.yml and an owner. Issues close automatically when a rescan
+# stops reporting the alert. At fleet scale this runs as a GitHub App across all repos.
+name: vuln-triage
+
+on:
+  workflow_call:
+    inputs:
+      dry-run:
+        type: boolean
+        default: false
+      platform-ref:
+        type: string
+        default: main
+    secrets:
+      DEPENDABOT_ALERTS_TOKEN:
+        description: Optional fine-grained token with Dependabot alerts read, to include Dependabot alerts
+        required: false
+
+permissions: {}
+
+jobs:
+  triage:
+    name: triage
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      security-events: read
+      issues: write
+      id-token: write # locate the platform commit
+    steps:
+      - uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+        with:
+          egress-policy: audit
+      - name: Locate the platform commit this workflow runs from
+        id: locate
+        env:
+          FALLBACK_REF: ${{ inputs.platform-ref }}
+        run: |
+          set -euo pipefail
+          repo="Triorex/paved-road-platform"; sha="$FALLBACK_REF"
+          if [ -n "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ]; then
+            jwt=$(curl -sSf -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+                  "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=paved-road-platform" | jq -r .value)
+            payload=$(printf '%s' "$jwt" | cut -d. -f2 | tr '_-' '/+')
+            while [ $(( ${#payload} % 4 )) -ne 0 ]; do payload="${payload}="; done
+            claims=$(printf '%s' "$payload" | base64 -d)
+            sha=$(jq -r '.job_workflow_sha' <<<"$claims")
+            repo=$(jq -r '.job_workflow_ref' <<<"$claims" | cut -d/ -f1-2)
+          fi
+          echo "repo=$repo" >> "$GITHUB_OUTPUT"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ steps.locate.outputs.repo }}
+          ref: ${{ steps.locate.outputs.sha }}
+          path: .platform
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.13"
+      - name: Triage
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          DEPENDABOT_ALERTS_TOKEN: ${{ secrets.DEPENDABOT_ALERTS_TOKEN }}
+          DRY_RUN: ${{ inputs.dry-run }}
+        run: |
+          pip install --disable-pip-version-check -q pyyaml==6.0.3
+          args=(--policy .platform/security/security-policy.yml --root .)
+          [ "$DRY_RUN" = "true" ] && args+=(--dry-run)
+          python .platform/scripts/vuln_triage.py "${args[@]}"

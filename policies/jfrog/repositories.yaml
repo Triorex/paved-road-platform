@@ -1,0 +1,30 @@
+# Artifactory YAML configuration (PATCH /artifactory/api/system/configuration). Design only.
+localRepositories:
+  pypi-local:   { type: pypi,   xray: { enabled: true } }
+  npm-local:    { type: npm,    xray: { enabled: true } }
+  release-docker-dev:     { type: docker, xray: { enabled: true } }
+  release-docker-staging: { type: docker, xray: { enabled: true } }
+  release-docker-prod:    { type: docker, xray: { enabled: true }, blockPushingSchema1: true }
+remoteRepositories:
+  pypi-remote:
+    type: pypi
+    url: https://files.pythonhosted.org
+    pyPIRegistryUrl: https://pypi.org
+    excludesPattern: "triorex-*/**"        # dependency-confusion guard
+    xray: { enabled: true }
+    curated: true
+  npm-remote:
+    type: npm
+    url: https://registry.npmjs.org
+    excludesPattern: "@triorex/**"
+    xray: { enabled: true }
+    curated: true
+  docker-remote:
+    type: docker
+    url: https://cgr.dev                    # Chainguard images, mirrored and scanned
+    xray: { enabled: true }
+    curated: true
+virtualRepositories:
+  pypi-virtual:   { type: pypi,   repositories: [pypi-local, pypi-remote],   defaultDeploymentRepo: pypi-local }
+  npm-virtual:    { type: npm,    repositories: [npm-local, npm-remote],     defaultDeploymentRepo: npm-local }
+  docker-virtual: { type: docker, repositories: [release-docker-prod, docker-remote] }

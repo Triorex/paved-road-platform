@@ -1,0 +1,11 @@
+[
+  {"property_name": "paved-road", "value_type": "single_select", "required": true, "default_value": "false",
+   "allowed_values": ["true", "false"], "description": "Repo is onboarded to the paved road; org rulesets target this"},
+  {"property_name": "ring", "value_type": "single_select", "required": true, "default_value": "2",
+   "allowed_values": ["0", "1", "2"], "description": "Rollout ring for platform changes: 0 platform test, 1 pilot, 2 everyone"},
+  {"property_name": "risk-tier", "value_type": "single_select", "required": true, "default_value": "medium",
+   "allowed_values": ["low", "medium", "high", "critical"], "description": "Business risk; drives review depth and SLA escalation"},
+  {"property_name": "language", "value_type": "single_select", "required": false,
+   "allowed_values": ["python", "node", "java", "go", "dotnet", "other"], "description": "Primary language; selects the caller template"},
+  {"property_name": "owner-team", "value_type": "string", "required": false, "description": "Owning team slug"}
+]

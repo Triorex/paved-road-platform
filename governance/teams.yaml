@@ -1,0 +1,6 @@
+# Teams referenced by CODEOWNERS and environment protection rules.
+teams:
+  - { name: appsec,        description: "Application security: owns policy, exceptions and production approvals" }
+  - { name: platform,      description: "Platform engineering: owns the paved-road workflows and runners" }
+  - { name: payments-team, description: "Owns payments-api" }
+  - { name: orders-team,   description: "Owns orders-api" }
