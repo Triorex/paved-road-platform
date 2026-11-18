@@ -5,6 +5,7 @@ For each repo in the inventory it checks, live against GitHub:
   - onboarded           custom property paved-road=true
   - caller present      .github/workflows/ci.yml calls the platform's pr-security workflow
   - platform version    pinned SHA matches the latest platform release (or how far behind)
+  - not withdrawn       pinned version is not a withdrawn release (defective versions are marked [WITHDRAWN])
   - ruleset active      org ruleset rules apply to the default branch
   - baseline attached   paved-road-baseline security configuration is attached
   - push protection     secret scanning push protection is on
@@ -28,7 +29,18 @@ from prlib import load_yaml  # noqa: E402
 PIN = re.compile(r"paved-road-platform/\.github/workflows/pr-security\.yml@([0-9a-f]{40})")
 
 
-def check(gh: Gh, org: str, name: str, latest_sha: str | None) -> dict:
+def release_index(gh: Gh, platform_repo: str) -> tuple[dict, set]:
+    """Map commit SHA -> release tag, and the set of withdrawn tags."""
+    by_sha, withdrawn = {}, set()
+    for rel in gh.get(f"repos/{platform_repo}/releases?per_page=100") or []:
+        sha = gh.get(f"repos/{platform_repo}/commits/{rel['tag_name']}")["sha"]
+        by_sha.setdefault(sha, rel["tag_name"])
+        if (rel.get("name") or "").startswith("[WITHDRAWN]"):
+            withdrawn.add(rel["tag_name"])
+    return by_sha, withdrawn
+
+
+def check(gh: Gh, org: str, name: str, latest_sha: str | None, releases: tuple[dict, set] = ({}, set())) -> dict:
     out = {}
     repo = gh.get(f"repos/{org}/{name}", allow_404=True)
     if not repo:
@@ -40,6 +52,8 @@ def check(gh: Gh, org: str, name: str, latest_sha: str | None) -> dict:
     out["caller"] = bool(pin)
     out["pinned"] = pin.group(1) if pin else None
     out["current"] = bool(pin and latest_sha and pin.group(1) == latest_sha)
+    out["version"] = releases[0].get(out["pinned"], "unreleased") if out["pinned"] else "none"
+    out["not_withdrawn"] = out["version"] not in releases[1]
     rules = gh.get(f"repos/{org}/{name}/rules/branches/{repo['default_branch']}") or []
     types = {r["type"] for r in rules}
     out["ruleset"] = {"pull_request", "required_status_checks"} <= types
@@ -67,7 +81,11 @@ def main(argv: list[str] | None = None) -> int:
     except GhError:
         latest_tag = latest_sha = None
 
-    cols = ["onboarded", "caller", "current", "ruleset", "baseline", "push_protection"]
+    cols = ["onboarded", "caller", "current", "not_withdrawn", "ruleset", "baseline", "push_protection"]
+    try:
+        releases = release_index(gh, inv["platform_repo"])
+    except GhError:
+        releases = ({}, set())
     lines = [f"# Paved Road fleet report: {org}", "",
              f"Latest platform release: **{latest_tag or 'none'}**" + (f" (`{latest_sha[:12]}`)" if latest_sha else ""), "",
              "| Repo | Ring | Risk | " + " | ".join(c.replace('_', ' ') for c in cols) + " | Status |",
@@ -81,7 +99,7 @@ def main(argv: list[str] | None = None) -> int:
             status["planned"] += 1
             continue
         try:
-            res = check(gh, org, repo["name"], latest_sha)
+            res = check(gh, org, repo["name"], latest_sha, releases)
         except GhError as exc:
             res = {"exists": True, "error": str(exc)[:80]}
         ok = res.get("exists") and all(res.get(c) for c in cols)
@@ -89,7 +107,7 @@ def main(argv: list[str] | None = None) -> int:
         status[state] += 1
         ring_c[state] += 1
         marks = " | ".join("✅" if res.get(c) else "❌" for c in cols)
-        lines.append(f"| {repo['name']} | {repo['ring']} | {repo['risk_tier']} | {marks} | {state} |")
+        lines.append(f"| {repo['name']} ({res.get('version', '?')}) | {repo['ring']} | {repo['risk_tier']} | {marks} | {state} |")
 
     total = len(inv["repos"])
     lines += ["", f"**Adoption:** {status['compliant']} of {total} repos fully on the paved road "

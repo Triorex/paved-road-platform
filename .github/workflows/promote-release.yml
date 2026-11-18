@@ -1,0 +1,61 @@
+# Promote a platform release candidate to a final release, on the SAME commit, only when ring 0
+# has proven it in production. Ring 1 and ring 2 consume final releases only (Dependabot ignores
+# pre-releases), so the fleet never adopts a platform version that has not reached production.
+name: promote-release
+
+# No inputs: the workflow promotes the newest release candidate it finds, so nobody can steer
+# what gets released by typing a parameter (Checkov CKV_GHA_7).
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  promote:
+    name: promote newest release candidate
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write # create the final tag and release
+      actions: read
+      deployments: read
+    steps:
+      - uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.13"
+      - name: Collect ring-0 production evidence
+        id: evidence
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          pip install --disable-pip-version-check -q pyyaml==6.0.3
+          python scripts/promote_release.py
+      - name: Create the final release on the candidate commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RC_TAG: ${{ steps.evidence.outputs.rc_tag }}
+          RC_SHA: ${{ steps.evidence.outputs.rc_sha }}
+        run: |
+          set -euo pipefail
+          final="${RC_TAG%-rc.*}"
+          if gh release view "$final" -R "$REPO" > /dev/null 2>&1; then
+            echo "::error::$final already exists"; exit 1
+          fi
+          gh api "repos/$REPO/git/refs" -f ref="refs/tags/$final" -f sha="$RC_SHA" > /dev/null
+          {
+            echo "Promoted from \`$RC_TAG\` after ring-0 production evidence. Same commit: \`$RC_SHA\`."
+            echo
+            echo '```yaml'
+            echo "uses: $REPO/.github/workflows/pr-security.yml@$RC_SHA # $final"
+            echo '```'
+            echo
+            cat rc-evidence.md
+          } > notes.md
+          gh release create "$final" -R "$REPO" --verify-tag --latest --title "Paved Road $final" --notes-file notes.md
+          echo "Released $final" >> "$GITHUB_STEP_SUMMARY"

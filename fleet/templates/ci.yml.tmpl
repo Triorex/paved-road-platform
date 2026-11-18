@@ -68,7 +68,8 @@ jobs:
     permissions:
       contents: read
       packages: write
-      attestations: read
+      id-token: write # sign the promotion attestation
+      attestations: write
 
   production:
     name: release-production
@@ -79,6 +80,8 @@ jobs:
       digest: ${{ needs.build.outputs.digest }}
       environment: production
     permissions:
-      contents: read
+      contents: write # record the production release
+      actions: read # read who approved the deployment
       packages: write
-      attestations: read
+      id-token: write
+      attestations: write

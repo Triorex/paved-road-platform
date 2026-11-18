@@ -18,8 +18,12 @@ def load_yaml(path: str) -> Any:
         return yaml.safe_load(fh) or {}
 
 
-def http_json(url: str, *, data: Any = None, headers: dict | None = None, timeout: int = 20) -> Any:
-    """GET (or POST when data is given) a JSON document."""
+def http_json(url: str, *, data: Any = None, headers: dict | None = None, timeout: int = 20,
+              method: str | None = None) -> Any:
+    """GET (or POST when data is given, or any explicit method) a JSON document; empty body -> None.
+
+    The only place platform scripts open URLs, so URL handling is reviewed once.
+    """
     body = None
     hdrs = {"User-Agent": USER_AGENT, "Accept": "application/json"}
     if headers:
@@ -27,9 +31,10 @@ def http_json(url: str, *, data: Any = None, headers: dict | None = None, timeou
     if data is not None:
         body = json.dumps(data).encode()
         hdrs["Content-Type"] = "application/json"
-    req = urllib.request.Request(url, data=body, headers=hdrs, method="POST" if body else "GET")
+    req = urllib.request.Request(url, data=body, headers=hdrs, method=method or ("POST" if body else "GET"))
     with urllib.request.urlopen(req, timeout=timeout) as resp:  # nosec B310 -- fixed https API hosts only; nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
-        return json.load(resp)
+        raw = resp.read()
+        return json.loads(raw) if raw else None
 
 
 def gate_mode(policy: dict, gate: str) -> str:

@@ -59,10 +59,42 @@ resource "aws_iam_role_policy" "deploy" {
 }
 
 # --- Encryption ------------------------------------------------------------------------------
+# Explicit key policy: the account administers the key; only ECR in this account may use it.
+locals {
+  ecr_kms_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "AccountAdministersKey"
+        Effect    = "Allow"
+        Principal = { AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root" }
+        Action    = "kms:*"
+        Resource  = "*" # in a key policy, "*" means this key only
+      },
+      {
+        Sid       = "EcrUsesKeyInThisAccount"
+        Effect    = "Allow"
+        Principal = { AWS = "*" }
+        Action    = ["kms:Encrypt", "kms:Decrypt", "kms:ReEncrypt*", "kms:GenerateDataKey*", "kms:DescribeKey", "kms:CreateGrant"]
+        Resource  = "*"
+        Condition = {
+          StringEquals = {
+            "kms:ViaService"    = "ecr.${data.aws_region.current.region}.amazonaws.com"
+            "kms:CallerAccount" = data.aws_caller_identity.current.account_id
+          }
+        }
+      }
+    ]
+  })
+}
+
+data "aws_region" "current" {}
+
 resource "aws_kms_key" "ecr" {
   description             = "Paved road: ECR image encryption"
   enable_key_rotation     = true
   deletion_window_in_days = 30
+  policy                  = local.ecr_kms_policy
   tags                    = var.tags
 }
 

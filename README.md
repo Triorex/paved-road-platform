@@ -83,6 +83,15 @@ and the `paved-road-baseline` security configuration apply automatically.
 - **Self-locating workflows.** Each reusable workflow reads `job_workflow_sha` from its OIDC token
   and loads policy and scripts from that exact platform commit, so pinning one SHA pins everything.
 
+## Releases: only proven versions reach production
+
+- **Apps:** a digest is promoted by exact copy, and the tag is checked against the signed digest.
+  Production requires a signed promotion to staging. A GitHub Release exists only for what reached
+  production. Unpromoted images are cleaned up weekly.
+- **Platform:** versions ship as `vX.Y.Z-rc.N` to ring 0; `promote-release.yml` cuts the final
+  `vX.Y.Z` on the same commit only after ring-0 production evidence. Defective versions are marked
+  `[WITHDRAWN]` and flagged by the fleet report. See `docs/adr/0003`.
+
 ## Local commands
 
 ```sh
