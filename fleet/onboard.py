@@ -68,7 +68,7 @@ def files_for(repo: dict, sha: str, version: str) -> dict[str, str]:
     return files
 
 
-def onboard(gh: Gh, org: str, repo: dict, sha: str, version: str, team_ids: dict) -> str:
+def onboard(gh: Gh, org: str, repo: dict, sha: str, version: str, team_ids: dict, skip_pr: bool = False) -> str:
     name = repo["name"]
     gh.call("PATCH", f"orgs/{org}/properties/values", {"repository_names": [name], "properties": [
         {"property_name": "paved-road", "value": "true"},
@@ -87,6 +87,8 @@ def onboard(gh: Gh, org: str, repo: dict, sha: str, version: str, team_ids: dict
                 "deployment_branch_policy": {"protected_branches": True, "custom_branch_policies": False} if cfg.get("main_only") else None}
         gh.call("PUT", f"repos/{org}/{name}/environments/{env}", body)
 
+    if skip_pr:
+        return "properties, teams, environments applied; paved-road files ship with the first push"
     has_ci = None if gh.dry_run and not repo.get("real") else gh.get(f"repos/{org}/{name}/contents/.github/workflows/ci.yml", allow_404=True)
     if has_ci:
         return "properties, teams, environments applied; caller already present"
@@ -118,6 +120,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--ring", type=int, choices=[0, 1, 2], help="only this rollout ring")
     ap.add_argument("--repo", help="only this repo")
     ap.add_argument("--apply", action="store_true", help="apply to repos marked real: true (others stay dry-run)")
+    ap.add_argument("--skip-pr", action="store_true", help="settings only; the repo's first push already carries the paved-road files")
     args = ap.parse_args(argv)
 
     inv = load_yaml(args.inventory)
@@ -130,7 +133,7 @@ def main(argv: list[str] | None = None) -> int:
     for repo in repos:
         gh = live if (args.apply and repo.get("real")) else plan
         try:
-            result = onboard(gh, org, repo, args.platform_sha, args.platform_version, team_ids)
+            result = onboard(gh, org, repo, args.platform_sha, args.platform_version, team_ids, args.skip_pr)
             outcomes["applied" if gh is live else "planned"] += 1
         except GhError as exc:
             result = f"FAILED: {exc}"
