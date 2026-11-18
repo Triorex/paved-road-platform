@@ -1,0 +1,11 @@
+# Throwaway "staging" cluster for staging-verify.yml: one kind node whose NodePort 30080 is
+# published on the runner at 127.0.0.1:8080, so DAST reaches the app through its Kubernetes Service.
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+nodes:
+  - role: control-plane
+    extraPortMappings:
+      - containerPort: 30080
+        hostPort: 8080
+        listenAddress: "127.0.0.1"
+        protocol: TCP

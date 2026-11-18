@@ -25,13 +25,13 @@ flowchart LR
   end
   pr -->|merge| build
   subgraph build[secure-build.yml]
-    b1[Tests, Hadolint] --> b2[Build on Chainguard<br/>push by digest]
-    b2 --> b3[Trivy + Dockle] & b4[DAST: OWASP ZAP]
-    b3 & b4 --> b5[SBOM, cosign keyless sign,<br/>SLSA provenance]
+    b2[Hadolint, build on Chainguard<br/>push by digest] --> b3[Trivy + Dockle]
+    b1[Unit tests] & b3 --> b5[SBOM, cosign keyless sign,<br/>SLSA provenance]
   end
-  build --> adm[admission-test.yml<br/>kind + Kyverno: signed ✓ unsigned ✗]
-  adm --> rel[release.yml<br/>staging → production<br/>verify, promote by digest]
-  rel --> ops[vuln-triage.yml · Scorecard · Dependabot<br/>KEV + EPSS → issues with SLA]
+  build --> stg[release.yml → staging<br/>verify, promote by digest]
+  stg --> sv[staging-verify.yml<br/>kind + Kyverno admission,<br/>deploy, DAST: OWASP ZAP<br/>→ signed DAST attestation]
+  sv --> prod[release.yml → production<br/>approval, requires staging + DAST evidence,<br/>never moves backwards]
+  prod --> ops[vuln-triage.yml · Scorecard · Dependabot<br/>KEV + EPSS → issues with SLA]
   ops -.->|fix PR| dev
 ```
 
@@ -40,9 +40,9 @@ flowchart LR
 | Path | Purpose |
 |---|---|
 | `.github/workflows/pr-security.yml` | All PR gates in parallel; one required check: `pr-security / gate` |
-| `.github/workflows/secure-build.yml` | Test → build → scan → DAST → SBOM, sign, attest (signing runs last) |
-| `.github/workflows/admission-test.yml` | Throwaway kind + Kyverno cluster proves signed images run and unsigned ones are denied |
-| `.github/workflows/release.yml` | Verify signature, SBOM attestation and provenance; promote one digest per environment |
+| `.github/workflows/secure-build.yml` | Tests alongside build → image scan → SBOM, sign, attest (signing runs last) |
+| `.github/workflows/release.yml` | Verify signature, SBOM and provenance; promote one digest per environment; never backwards |
+| `.github/workflows/staging-verify.yml` | After staging: kind + Kyverno admission cases, deploy the app's manifests, OWASP ZAP, signed DAST attestation |
 | `.github/workflows/vuln-triage.yml` | Alerts → CISA KEV + EPSS → GitHub Issues with SLA due dates; closes on clean rescan |
 | `security/security-policy.yml` | Every threshold and audit/enforce mode, for the whole fleet |
 | `security/semgrep/`, `gitleaks.toml`, `zap-rules.tsv` | Org-specific scanner rules |

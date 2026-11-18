@@ -258,7 +258,7 @@ a { color: var(--accent); }
           <circle class="dot-live" cx="478" cy="300" r="4"/><text class="t-ink" x="490" y="304" font-size="11" font-weight="600">Minimal base image</text><text class="t-muted" x="490" y="317" font-size="10">Chainguard · non-root</text>
           <circle class="dot-live" cx="478" cy="331" r="4"/><text class="t-ink" x="490" y="335" font-size="11" font-weight="600">Push by digest</text><text class="t-muted" x="490" y="348" font-size="10">GHCR · immutable tags</text>
           <circle class="dot-live" cx="478" cy="362" r="4"/><text class="t-ink" x="490" y="366" font-size="11" font-weight="600">Image scan</text><text class="t-muted" x="490" y="379" font-size="10">Trivy · Dockle (CIS)</text>
-          <circle class="dot-live" cx="478" cy="393" r="4"/><text class="t-ink" x="490" y="397" font-size="11" font-weight="600">DAST</text><text class="t-muted" x="490" y="410" font-size="10">OWASP ZAP on live container</text>
+          <circle class="dot-live" cx="478" cy="393" r="4"/><text class="t-ink" x="490" y="397" font-size="11" font-weight="600">DAST</text><text class="t-muted" x="490" y="410" font-size="10">OWASP ZAP after staging</text>
         </g>
         <line class="wire" x1="661" y1="196" x2="682" y2="196" marker-end="url(#ah)"/>
 
@@ -403,13 +403,13 @@ a { color: var(--accent); }
         <tr><td>Minimal base image</td><td>Chainguard Python and Node images, multi-stage, <code>USER nonroot</code></td><td>Enforced by Hadolint, Dockle and Kyverno</td><td><code>Dockerfile</code></td><td><span class="pill live">Live</span></td></tr>
         <tr><td>Push by digest</td><td>GHCR with tags derived from the commit SHA</td><td>Not a gate; the digest is what later stages scan and sign</td><td><code>secure-build.yml</code></td><td><span class="pill live">Live</span></td></tr>
         <tr><td>Image scan</td><td>Trivy (CVEs), Dockle (CIS Docker benchmark)</td><td>Fixable high or critical CVE; Dockle fatal</td><td><code>secure-build.yml</code></td><td><span class="pill live">Live</span></td></tr>
-        <tr><td>DAST</td><td>OWASP ZAP API scan against the built image running as a service container</td><td>High-risk alert not listed in the ZAP rules file</td><td><code>secure-build.yml</code>, <code>security/zap-rules.tsv</code></td><td><span class="pill live">Live</span></td></tr>
+        <tr><td>DAST</td><td>OWASP ZAP API scan against the workload deployed at the staging digest, through its Kubernetes Service; signed DAST attestation required for production</td><td>High-risk alert not listed in the ZAP rules file</td><td><code>staging-verify.yml</code>, <code>security/zap-rules.tsv</code></td><td><span class="pill live">Live</span></td></tr>
         <tr class="group"><td colspan="5">04 · Sign and attest (secure-build.yml, runs only after every gate above passed)</td></tr>
         <tr><td>SBOM</td><td>Syft, CycloneDX JSON</td><td>Not a gate; feeds attestation and incident lookups</td><td><code>secure-build.yml</code></td><td><span class="pill live">Live</span></td></tr>
         <tr><td>Keyless signature</td><td>cosign with Sigstore Fulcio and Rekor, using the job's OIDC token</td><td>Signing fails, so the image stays undeployable</td><td><code>secure-build.yml</code></td><td><span class="pill live">Live</span></td></tr>
         <tr><td>SBOM attestation and SLSA provenance</td><td><code>cosign attest</code>, <code>actions/attest-build-provenance</code></td><td>Attestation fails, so promotion is refused later</td><td><code>secure-build.yml</code></td><td><span class="pill live">Live</span></td></tr>
-        <tr class="group"><td colspan="5">05 · Admit and release (admission-test.yml, release.yml)</td></tr>
-        <tr><td>Admission test in CI</td><td>Throwaway kind cluster with Kyverno inside the runner</td><td>Signed image is denied, or an unsigned control image is admitted</td><td><code>admission-test.yml</code></td><td><span class="pill live">Live</span></td></tr>
+        <tr class="group"><td colspan="5">05 · Release and verify (release.yml, staging-verify.yml)</td></tr>
+        <tr><td>Staging verification</td><td>After staging: kind + Kyverno admission cases, deploy the app manifests, OWASP ZAP, signed DAST attestation required for production</td><td>Signed image denied, unsigned admitted, or ZAP FAIL rule hit</td><td><code>staging-verify.yml</code></td><td><span class="pill live">Live</span></td></tr>
         <tr><td>Signature and pod policy</td><td>Kyverno <code>verifyImages</code>, approved registry, non-root, read-only root filesystem, no <code>:latest</code></td><td>Image not signed by the central workflow, or pod breaks policy</td><td><code>policies/kyverno/</code></td><td><span class="pill live">Live</span></td></tr>
         <tr><td>Environments and promotion</td><td>GitHub environments (staging, production) with required reviewers; <code>gh attestation verify</code>; copy by digest</td><td>Missing approval or attestation check fails</td><td><code>release.yml</code></td><td><span class="pill live">Live</span></td></tr>
         <tr><td>AWS production target</td><td>Terraform: OIDC role for GitHub, ECR with immutable tags and scan on push, KMS, EKS</td><td>Not applied; scanned by Checkov in stage 02</td><td><code>infra/terraform/</code></td><td><span class="pill design">Design</span></td></tr>
@@ -514,7 +514,7 @@ a { color: var(--accent); }
 <pre>.github/workflows/
   pr-security.yml      reusable
   secure-build.yml     reusable
-  admission-test.yml   reusable
+  staging-verify.yml   reusable
   release.yml          reusable
   vuln-triage.yml      scheduled
   scorecard.yml        scheduled
@@ -583,7 +583,7 @@ SECURITY.md</pre>
         <tr><td>Design security capabilities in GitHub Actions</td><td>Central reusable workflows, versioned and pinned, least-privilege tokens, OIDC</td><td><span class="pill live">Live</span></td></tr>
         <tr><td>GHAS: code scanning, secret scanning, dependency analysis</td><td>CodeQL, push protection, dependency review, Dependabot</td><td><span class="pill live">Live</span></td></tr>
         <tr><td>Software Composition Analysis</td><td>OSV-Scanner, Trivy, license allowlist, SBOM</td><td><span class="pill live">Live</span></td></tr>
-        <tr><td>SAST and DAST</td><td>CodeQL, Semgrep, Bandit; OWASP ZAP against the running container</td><td><span class="pill live">Live</span></td></tr>
+        <tr><td>SAST and DAST</td><td>CodeQL, Semgrep, Bandit; OWASP ZAP against the staging deployment</td><td><span class="pill live">Live</span></td></tr>
         <tr><td>Secure artifact management</td><td>GHCR by digest with immutable tags; Artifactory repo design</td><td><span class="pill live">Live</span> <span class="pill design">Design</span></td></tr>
         <tr><td>Dependency governance, package curation, trusted open source</td><td><code>curation_check.py</code>, hash-pinned installs, dependency review; JFrog Curation design</td><td><span class="pill live">Live</span> <span class="pill design">Design</span></td></tr>
         <tr><td>Block vulnerable, malicious or unapproved dependencies</td><td>Curation check, dependency review, SCA gates, exceptions with expiry</td><td><span class="pill live">Live</span></td></tr>
@@ -610,7 +610,7 @@ SECURITY.md</pre>
       <li>Write the approved plan into <code>docs/PLAN.md</code> and open VS Code.</li></ul></li>
     <li><h3>Platform repo</h3><ul>
       <li>Security config: policy thresholds, exceptions, Semgrep rules, license allowlist, ZAP rules.</li>
-      <li>Reusable workflows: <code>pr-security.yml</code>, <code>secure-build.yml</code>, <code>admission-test.yml</code>, <code>release.yml</code>.</li>
+      <li>Reusable workflows: <code>pr-security.yml</code>, <code>secure-build.yml</code>, <code>release.yml</code>, <code>staging-verify.yml</code>.</li>
       <li>Kyverno policies and the scripts: curation, exceptions, triage, demo, verify.</li></ul></li>
     <li><h3>Consumer repos</h3><ul>
       <li><code>payments-api</code>: FastAPI service, tests, hash-pinned requirements, Chainguard Dockerfile, caller workflow.</li>
@@ -619,7 +619,7 @@ SECURITY.md</pre>
       <li>Create the three public repos in the org and push.</li>
       <li>Apply governance: secret scanning with push protection, Dependabot, branch rules, environments, allowed-actions policy.</li></ul></li>
     <li><h3>First green run</h3><ul>
-      <li>Open a PR and watch every gate pass. Merge to build, scan, run DAST, generate the SBOM, sign and attest.</li>
+      <li>Open a PR and watch every gate pass. Merge to build, scan, generate the SBOM, sign and attest; promote to staging, then run admission and DAST against the deployed workload.</li>
       <li>Check the result with <code>cosign verify</code> and <code>gh attestation verify</code>.</li></ul></li>
     <li><h3>Admission</h3><ul>
       <li>CI: the admission test admits the signed image and denies an unsigned one.</li>

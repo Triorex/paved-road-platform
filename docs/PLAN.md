@@ -46,7 +46,8 @@ PR GATES      pr-security.yml: secrets (GHAS + gitleaks) · SAST (CodeQL, Semgre
 BUILD         secure-build.yml: unit tests → Hadolint → build on Chainguard → push GHCR by digest
               → Trivy image + Dockle → DAST (OWASP ZAP) → SBOM (Syft) → cosign sign + attest
               → SLSA provenance          (signing runs last: a signature means every gate passed)
-ADMISSION     admission-test.yml: kind + Kyverno: signed admitted, unsigned denied
+STAGING       release.yml (staging) → staging-verify.yml: kind + Kyverno admission (signed admitted,
+              unsigned/privileged denied), deploy app manifests, OWASP ZAP → signed DAST attestation
 RELEASE       release.yml: staging → production (required reviewer), attestations verified, promote by digest
 OPERATE       vuln-triage.yml (KEV + EPSS → issues with SLA) · scorecard.yml · Dependabot · fleet report
 ```

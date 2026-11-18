@@ -1,7 +1,7 @@
 # Workload policies. The same file runs in two places:
 #   1. In CI (pr-security.yml, policy job): the Kyverno CLI applies it to the manifests in the PR,
 #      so a bad manifest fails before merge.
-#   2. In the cluster (admission-test.yml and the demo): Kyverno enforces it at admission.
+#   2. In the cluster (staging-verify.yml and the demo): Kyverno enforces it at admission.
 # Rules are written for Pods; Kyverno auto-generates the matching rules for Deployments and other
 # pod controllers.
 apiVersion: kyverno.io/v1

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Admission test cases, shared by CI (admission-test.yml) and the laptop demo (scripts/demo.sh).
+# Admission test cases, shared by CI (staging-verify.yml) and the laptop demo (scripts/demo.sh).
 # Usage: admission_cases.sh <signed-image@digest> <unsigned-image@digest> [container-port]
 set -uo pipefail
 
