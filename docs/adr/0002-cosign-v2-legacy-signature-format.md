@@ -28,3 +28,13 @@ verified with `gh attestation verify` in `release.yml`, so provenance is not aff
   precisely so this kind of upgrade is proven before it reaches the fleet.
 - cosign v2 receives security fixes on the 2.6 line; Dependabot and the platform's own release
   process track it.
+
+## Update (v1.0.2): two attestation formats on one image
+
+GitHub artifact attestations (SLSA provenance) are Sigstore bundles attached through OCI
+referrers. When a bundle is present, `cosign verify-attestation` (v2.6) verifies only bundles,
+so it no longer saw the legacy cosign SBOM attestation and the release check failed.
+The SBOM is now attested in both formats: the cosign attestation is what Kyverno verifies at
+admission, and a GitHub SBOM attestation is what `release.yml` verifies with
+`gh attestation verify`. Both collapse to one bundle-format attestation when the Kyverno upgrade
+that reads bundles lands.

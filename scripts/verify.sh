@@ -11,7 +11,8 @@ COSIGN="docker run --rm -v $HOME/.docker/config.json:/root/.docker/config.json:r
 
 echo "== Signature";        $COSIGN verify "$REF" --certificate-identity-regexp "$ID" --certificate-oidc-issuer "$ISS" \
                               | jq -r '.[0].optional | "signed by: \(.Subject)\nfrom repo: \(.githubWorkflowRepository) @ \(.githubWorkflowSha)"'
-echo "== SBOM attestation"; $COSIGN verify-attestation "$REF" --type cyclonedx --certificate-identity-regexp "$ID" --certificate-oidc-issuer "$ISS" \
-                              | jq -r '.payload' | base64 -d | jq -r '"components in SBOM: \(.predicate.components | length)"'
-echo "== SLSA provenance";  gh attestation verify "oci://$REF" --owner Triorex \
-                              --signer-workflow Triorex/paved-road-platform/.github/workflows/secure-build.yml
+echo "== SLSA provenance and SBOM attestations"
+for type in https://slsa.dev/provenance/v1 https://cyclonedx.org/bom; do
+  gh attestation verify "oci://$REF" --owner Triorex --predicate-type "$type" \
+    --signer-workflow Triorex/paved-road-platform/.github/workflows/secure-build.yml > /dev/null && echo "verified: $type"
+done

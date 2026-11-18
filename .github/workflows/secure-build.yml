@@ -390,6 +390,13 @@ jobs:
           set -euo pipefail
           cosign sign --yes "$IMAGE@$DIGEST"
           cosign attest --yes --type cyclonedx --predicate sbom.cdx.json "$IMAGE@$DIGEST"
+      - name: SBOM attestation (GitHub artifact attestation, verified at release)
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-name: ${{ env.IMAGE }}
+          subject-digest: ${{ env.DIGEST }}
+          sbom-path: sbom.cdx.json
+          push-to-registry: true
       - name: SLSA build provenance (GitHub artifact attestation)
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
@@ -405,6 +412,6 @@ jobs:
             echo "| | |"; echo "|---|---|"
             echo "| Image | \`$IMAGE@$DIGEST\` |"
             echo "| Signer | \`$(jq -r '.[0].optional.Subject' verify.json)\` |"
-            echo "| SBOM | CycloneDX attestation (cosign) + workflow artifact |"
+            echo "| SBOM | CycloneDX: cosign attestation (read by Kyverno) + GitHub attestation (read at release) |"
             echo "| Provenance | SLSA v1 via GitHub artifact attestations |"
           } >> "$GITHUB_STEP_SUMMARY"
