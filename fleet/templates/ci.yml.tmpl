@@ -7,6 +7,7 @@ on:
   pull_request:
   push:
     branches: [main]
+    paths-ignore: ['**.md', 'docs/**'] # docs-only changes ship nothing
 
 permissions: {}
 
@@ -27,17 +28,16 @@ jobs:
       pull-requests: write
       actions: read
 
+  # Builds right away; pr-security re-runs on main in parallel and gates the staging promotion.
   build:
     name: secure-build
     if: github.event_name == 'push'
-    needs: pr-security
     uses: Triorex/paved-road-platform/.github/workflows/secure-build.yml@{{PLATFORM_SHA}} # {{PLATFORM_VERSION}}
     with:
       image-name: {{IMAGE_NAME}}
       language: {{LANGUAGE}}
       install-command: {{INSTALL}}
       test-command: {{TEST}}
-      dast-mode: {{DAST_MODE}}
     permissions:
       contents: read
       id-token: write
@@ -45,21 +45,9 @@ jobs:
       security-events: write
       attestations: write
 
-  admission:
-    name: admission-test
-    needs: build
-    uses: Triorex/paved-road-platform/.github/workflows/admission-test.yml@{{PLATFORM_SHA}} # {{PLATFORM_VERSION}}
-    with:
-      image: ${{ needs.build.outputs.image }}
-      digest: ${{ needs.build.outputs.digest }}
-    permissions:
-      contents: read
-      packages: write
-      id-token: write
-
   staging:
     name: release-staging
-    needs: [build, admission]
+    needs: [pr-security, build]
     uses: Triorex/paved-road-platform/.github/workflows/release.yml@{{PLATFORM_SHA}} # {{PLATFORM_VERSION}}
     with:
       image: ${{ needs.build.outputs.image }}
@@ -67,13 +55,29 @@ jobs:
       environment: staging
     permissions:
       contents: read
+      deployments: read # refuse to move staging backwards
       packages: write
       id-token: write # sign the promotion attestation
       attestations: write
 
+  # Admission + DAST against the workload deployed at the staging digest; production needs its attestation.
+  staging-verify:
+    name: staging-verify
+    needs: [build, staging]
+    uses: Triorex/paved-road-platform/.github/workflows/staging-verify.yml@{{PLATFORM_SHA}} # {{PLATFORM_VERSION}}
+    with:
+      image: ${{ needs.build.outputs.image }}
+      digest: ${{ needs.build.outputs.digest }}
+      dast-mode: {{DAST_MODE}}
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+
   production:
     name: release-production
-    needs: [build, staging]
+    needs: [build, staging-verify]
     uses: Triorex/paved-road-platform/.github/workflows/release.yml@{{PLATFORM_SHA}} # {{PLATFORM_VERSION}}
     with:
       image: ${{ needs.build.outputs.image }}
@@ -81,6 +85,7 @@ jobs:
       environment: production
     permissions:
       contents: read
+      deployments: read
       packages: write
       id-token: write
       attestations: write

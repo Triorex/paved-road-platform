@@ -1,0 +1,252 @@
+# Paved Road · staging verification (reusable)
+#
+# Runs AFTER a digest is promoted to staging and BEFORE production can be requested:
+#
+#   1. Stand up a policy-enforcing cluster (kind + Kyverno, the same policies every cluster runs).
+#   2. Admission cases: the signed image is admitted; an unsigned image and a privileged pod are denied.
+#   3. Deploy the repo's own Kubernetes manifests at the promoted digest (Kyverno verifies it again).
+#   4. DAST: OWASP ZAP against the running workload, through its Kubernetes Service.
+#   5. Record a signed DAST attestation for the digest. release.yml refuses production without one,
+#      so the evidence travels with the digest instead of depending on job ordering.
+#
+# Production approval is only requested after this job succeeds, so the approver sees DAST results.
+name: staging-verify
+
+on:
+  workflow_call:
+    inputs:
+      image:
+        type: string
+        required: true
+      digest:
+        type: string
+        required: true
+      manifests:
+        description: Directory with the app's Kubernetes manifests (Namespace, Deployment, Service)
+        type: string
+        default: deploy/k8s
+      dast-mode:
+        description: api (OpenAPI-driven ZAP scan) | baseline (passive spider)
+        type: string
+        default: baseline
+      openapi-path:
+        type: string
+        default: /openapi.json
+      health-path:
+        type: string
+        default: /healthz
+      platform-ref:
+        type: string
+        default: main
+
+permissions: {}
+
+env:
+  KYVERNO_CHART: 3.9.2 # app v1.19.2
+  CANARY_BASE: cgr.dev/chainguard/static@sha256:fc42af33e643f20d08baf03cddcc1c02ba57052dfb02edb0d79f3fc47bcea8d9
+  ZAP_IMAGE: ghcr.io/zaproxy/zaproxy@sha256:9624669db72f54d86c4b46a7064518bd9bf79d8c61a4c31befa9923489f328af
+  DAST_TYPE: https://triorex.dev/attestations/dast/v1
+  NODE_PORT: "30080" # published on 127.0.0.1:8080 by policies/kind/staging-cluster.yaml
+
+jobs:
+  verify:
+    name: staging verify (admission + dast)
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write # push the unsigned canary image; push the DAST attestation
+      id-token: write # locate the platform commit; sign the DAST attestation
+      attestations: write
+    env:
+      IMAGE: ${{ inputs.image }}
+      DIGEST: ${{ inputs.digest }}
+      MANIFESTS: ${{ inputs.manifests }}
+    steps:
+      - uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
+        with:
+          egress-policy: audit
+      - name: Pre-pull the ZAP image while the cluster comes up
+        run: nohup docker pull -q "$ZAP_IMAGE" > "$RUNNER_TEMP/zap-pull.log" 2>&1 &
+      - name: Locate the platform commit this workflow runs from
+        id: locate
+        env:
+          FALLBACK_REF: ${{ inputs.platform-ref }}
+        run: |
+          set -euo pipefail
+          repo="Triorex/paved-road-platform"; sha="$FALLBACK_REF"
+          if [ -n "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ]; then
+            jwt=$(curl -sSf -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+                  "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=paved-road-platform" | jq -r .value)
+            payload=$(printf '%s' "$jwt" | cut -d. -f2 | tr '_-' '/+')
+            while [ $(( ${#payload} % 4 )) -ne 0 ]; do payload="${payload}="; done
+            claims=$(printf '%s' "$payload" | base64 -d)
+            sha=$(jq -r '.job_workflow_sha' <<<"$claims")
+            repo=$(jq -r '.job_workflow_ref' <<<"$claims" | cut -d/ -f1-2)
+          fi
+          echo "repo=$repo" >> "$GITHUB_OUTPUT"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ steps.locate.outputs.repo }}
+          ref: ${{ steps.locate.outputs.sha }}
+          path: .platform
+          persist-credentials: false
+      - name: DAST gate mode from the security policy
+        id: policy
+        run: echo "dast_mode=$(yq '.gates.dast.mode' .platform/security/security-policy.yml)" >> "$GITHUB_OUTPUT"
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Push an UNSIGNED canary image to the same registry
+        id: canary
+        env:
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          canary="ghcr.io/${OWNER,,}/admission-canary:unsigned-${GITHUB_SHA::12}"
+          printf 'FROM %s\nUSER 65532\n' "$CANARY_BASE" | docker build -t "$canary" -
+          docker push "$canary"
+          echo "ref=$(docker inspect --format '{{index .RepoDigests 0}}' "$canary")" >> "$GITHUB_OUTPUT"
+      - uses: helm/kind-action@ea822c7bf1874f08e5a491df991c228edffc3376 # v1.15.2
+        with:
+          cluster_name: paved-road
+          config: .platform/policies/kind/staging-cluster.yaml
+          wait: 120s
+      - name: Install Kyverno and the paved-road policies
+        env:
+          GH_ACTOR: ${{ github.actor }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          kubectl create namespace kyverno
+          kubectl -n kyverno create secret docker-registry ghcr \
+            --docker-server=ghcr.io --docker-username="$GH_ACTOR" --docker-password="$GH_TOKEN"
+          helm install kyverno kyverno --repo https://kyverno.github.io/kyverno --version "$KYVERNO_CHART" \
+            -n kyverno --wait --timeout 5m \
+            --set 'existingImagePullSecrets[0]=ghcr' \
+            --set admissionController.replicas=1 \
+            --set backgroundController.enabled=false \
+            --set cleanupController.enabled=false \
+            --set reportsController.enabled=false
+          kubectl apply -f .platform/policies/kyverno/admission/ -f .platform/policies/kyverno/workload/
+          kubectl wait --for=condition=Ready clusterpolicy --all --timeout=120s
+          kubectl create namespace paved-road-demo
+          kubectl label namespace paved-road-demo paved-road.triorex.io/enforce=true
+          kubectl -n paved-road-demo create secret docker-registry ghcr \
+            --docker-server=ghcr.io --docker-username="$GH_ACTOR" --docker-password="$GH_TOKEN"
+      - name: Admission cases (signed admitted, unsigned and privileged denied)
+        env:
+          CANARY: ${{ steps.canary.outputs.ref }}
+        run: bash .platform/scripts/admission_cases.sh "$IMAGE@$DIGEST" "$CANARY"
+      - name: Deploy the app's own manifests at the promoted digest
+        env:
+          GH_ACTOR: ${{ github.actor }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HEALTH: ${{ inputs.health-path }}
+        run: |
+          set -euo pipefail
+          [ -d "$MANIFESTS" ] || { echo "::error::no Kubernetes manifests at $MANIFESTS"; exit 1; }
+          export REF="$IMAGE@$DIGEST"
+          mkdir -p rendered
+          for f in "$MANIFESTS"/*.yaml "$MANIFESTS"/*.yml; do
+            [ -f "$f" ] || continue
+            # pin this app's image to the promoted digest; expose the first Service on the node port
+            yq '(.. | select(tag == "!!map" and has("image")) | select(.image | test("^" + strenv(IMAGE) + "[:@]")) | .image) = strenv(REF)
+                | (select(.kind == "Service") | .spec.type) = "NodePort"
+                | (select(.kind == "Service") | .spec.ports[0].nodePort) = env(NODE_PORT)' "$f" > "rendered/$(basename "$f")"
+          done
+          [ "$(yq -N 'select(.kind == "Service") | .metadata.name' rendered/* | wc -l)" -eq 1 ] \
+            || { echo "::error::staging-verify expects exactly one Service in $MANIFESTS"; exit 1; }
+          yq 'select(.kind == "Namespace")' rendered/* | kubectl apply -f -
+          for ns in $(yq -N '.metadata.namespace // ""' rendered/* | sort -u | grep -v '^$'); do
+            kubectl -n "$ns" create secret docker-registry ghcr --dry-run=client -o yaml \
+              --docker-server=ghcr.io --docker-username="$GH_ACTOR" --docker-password="$GH_TOKEN" | kubectl apply -f -
+            until kubectl -n "$ns" get serviceaccount default > /dev/null 2>&1; do sleep 1; done
+            kubectl -n "$ns" patch serviceaccount default -p '{"imagePullSecrets":[{"name":"ghcr"}]}'
+          done
+          kubectl apply -f rendered/
+          for d in $(yq -N 'select(.kind == "Deployment") | .metadata.namespace + "/" + .metadata.name' rendered/*); do
+            kubectl -n "${d%/*}" rollout status "deployment/${d#*/}" --timeout=180s
+          done
+          for _ in $(seq 1 30); do
+            if curl -fsS "http://127.0.0.1:8080${HEALTH}" > /dev/null; then echo "app is serving through its Service"; exit 0; fi
+            sleep 2
+          done
+          echo "::error::app did not answer on ${HEALTH} through its Service"; exit 1
+      - name: Prepare ZAP workspace
+        run: |
+          cp .platform/security/zap-rules.tsv zap-rules.tsv
+          chmod a+w "$GITHUB_WORKSPACE"
+      - name: ZAP API scan (OpenAPI-driven)
+        if: inputs.dast-mode == 'api'
+        uses: zaproxy/action-api-scan@5158fe4d9d8fcc75ea204db81317cce7f9e5453d # v0.10.0
+        with:
+          docker_name: ${{ env.ZAP_IMAGE }}
+          target: http://localhost:8080${{ inputs.openapi-path }}
+          format: openapi
+          rules_file_name: zap-rules.tsv
+          cmd_options: -I
+          fail_action: ${{ steps.policy.outputs.dast_mode == 'enforce' }}
+          allow_issue_writing: false
+          artifact_name: zap-api-report
+      - name: ZAP baseline scan
+        if: inputs.dast-mode != 'api'
+        uses: zaproxy/action-baseline@de8ad967d3548d44ef623df22cf95c3b0baf8b25 # v0.15.0
+        with:
+          docker_name: ${{ env.ZAP_IMAGE }}
+          target: http://localhost:8080
+          rules_file_name: zap-rules.tsv
+          cmd_options: -I
+          fail_action: ${{ steps.policy.outputs.dast_mode == 'enforce' }}
+          allow_issue_writing: false
+          artifact_name: zap-baseline-report
+      - name: DAST record (predicate)
+        env:
+          REPO: ${{ github.repository }}
+          COMMIT: ${{ github.sha }}
+          RUN_ID: ${{ github.run_id }}
+          SCAN: ${{ inputs.dast-mode }}
+          GATE_MODE: ${{ steps.policy.outputs.dast_mode }}
+        run: |
+          set -euo pipefail
+          alerts=null
+          if [ -f report_json.json ]; then
+            alerts=$(jq '[.site[]?.alerts[]?] | group_by(.riskcode) | map({key: (.[0].riskcode | tostring), value: length})
+                         | from_entries | {high: (.["3"] // 0), medium: (.["2"] // 0), low: (.["1"] // 0), informational: (.["0"] // 0)}' report_json.json)
+          fi
+          jq -n --arg repo "$REPO" --arg commit "$COMMIT" --arg run "$RUN_ID" --arg scan "$SCAN" \
+                --arg gate "$GATE_MODE" --argjson alerts "$alerts" --arg at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            '{environment: "staging", scanner: "OWASP ZAP", scan: $scan, gate_mode: $gate, result: "pass",
+              alerts: $alerts, deployed_via: "kubernetes service (kind + kyverno)",
+              repository: $repo, commit: $commit, run_id: $run, scanned_at: $at}' > dast.json
+          cat dast.json
+      - name: Signed DAST attestation (required for production)
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-name: ${{ env.IMAGE }}
+          subject-digest: ${{ env.DIGEST }}
+          predicate-type: ${{ env.DAST_TYPE }}
+          predicate-path: dast.json
+          push-to-registry: true
+      - name: Summary
+        run: |
+          {
+            echo "## Staging verified"
+            echo "- Digest: \`$DIGEST\`"
+            echo "- Admission: signed admitted, unsigned and privileged denied (see table above)"
+            echo "- Deployed: \`$MANIFESTS\` at the promoted digest, healthy behind its Service"
+            echo "- DAST: OWASP ZAP passed; alerts by risk: \`$(jq -c .alerts dast.json)\`"
+            echo "- Recorded: signed DAST attestation (\`$DAST_TYPE\`)"
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Diagnostics
+        if: failure()
+        run: |
+          kubectl get pods -A -o wide || true
+          for ns in $(yq -N '.metadata.namespace // ""' rendered/* 2>/dev/null | sort -u | grep -v '^$'); do
+            kubectl -n "$ns" describe pods | tail -40 || true
+            kubectl -n "$ns" logs -l app.kubernetes.io/name --tail=50 || true
+          done

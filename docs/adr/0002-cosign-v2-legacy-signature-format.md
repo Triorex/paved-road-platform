@@ -24,7 +24,7 @@ verified with `gh attestation verify` in `release.yml`, so provenance is not aff
 
 - Signing and admission work today with no format risk.
 - We carry a known upgrade: move to cosign v3 bundles once the Kyverno upgrade that reads them
-  has passed the admission test (admission-test.yml) in ring 0. The admission test exists
+  has passed the admission test (staging-verify.yml) in ring 0. The admission test exists
   precisely so this kind of upgrade is proven before it reaches the fleet.
 - cosign v2 receives security fixes on the 2.6 line; Dependabot and the platform's own release
   process track it.

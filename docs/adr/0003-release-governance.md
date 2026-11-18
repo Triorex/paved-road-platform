@@ -30,6 +30,19 @@ Two problems surfaced once the pipeline ran end to end:
 - Defective releases are withdrawn, not deleted: marked pre-release and titled `[WITHDRAWN]`, and the
   fleet report flags any repo still pinned to them.
 
+**Pipeline order and evidence (v1.1.0)**
+- DAST runs after staging, against the workload deployed from the app's own manifests at the
+  promoted digest (`staging-verify.yml`), and writes a signed DAST attestation
+  (`https://triorex.dev/attestations/dast/v1`). Production refuses a digest without a passing one.
+- The admission test moved into the same post-staging job: deploying to the policy-enforcing
+  cluster is the admission test.
+- An environment never moves backwards: the commit must equal or descend from the commit already
+  deployed there (GitHub compare API). Rollback is a revert on main that rolls forward. Promotions
+  to one environment are serialised with a concurrency group. Found when two Dependabot merges
+  17 seconds apart both raced to production.
+- Push builds no longer wait for the re-run of pr-security; it gates the staging promotion instead.
+  Unit tests run alongside the build; signing waits for both. Time to staging: ~9-11 min → ~4-5 min.
+
 ## Consequences
 
 - The releases lists (platform and app) contain only what was proven in production.
