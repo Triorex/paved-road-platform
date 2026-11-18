@@ -37,7 +37,7 @@ expect() { # case-name expected(admit|deny) name image privileged
   local out rc
   out=$(manifest "$3" "$4" "$5" | kubectl apply -f - 2>&1); rc=$?
   if { [ "$2" = admit ] && [ $rc -eq 0 ]; } || { [ "$2" = deny ] && [ $rc -ne 0 ]; }; then
-    pass=$((pass + 1)); result="✅ ${2}ed"
+    pass=$((pass + 1)); result=$([ "$2" = admit ] && echo "✅ admitted" || echo "✅ denied")
   else
     fail=$((fail + 1)); result="❌ unexpected"
   fi

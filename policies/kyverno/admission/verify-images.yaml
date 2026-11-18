@@ -30,6 +30,9 @@ spec:
         - imageReferences:
             - "ghcr.io/triorex/*"
           failureAction: Enforce
+          # Read signatures from the private registry with the 'ghcr' pull secret in the kyverno namespace.
+          imageRegistryCredentials:
+            secrets: ["ghcr"]
           mutateDigest: true
           verifyDigest: true
           required: true
