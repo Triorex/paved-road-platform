@@ -13,7 +13,7 @@ from the developer's laptop to production.
 
 | Decision | Choice |
 |---|---|
-| GitHub home | Organization `Triorex` (GitHub Team plan), public repos (GHAS features free on public repos) |
+| GitHub home | Organization `Triorex` (GitHub Team plan), public repos with hardening (decided 2026-11-18 after reviewing the private-repo trade-offs: on Team, private repos lose free GHAS, artifact attestations and environment reviewers) |
 | Repos | `paved-road-platform` (central), `payments-api` (Python FastAPI, golden template), `orders-api` (Node.js Express) |
 | Registry | GHCR (the local AWS CLI cannot run on this Mac) |
 | JFrog | Design and config only; live `curation_check.py` stands in |
@@ -58,7 +58,7 @@ OPERATE       vuln-triage.yml (KEV + EPSS → issues with SLA) · scorecard.yml 
 - [ ] **2. Consumer repos** (one at a time)
   - [x] payments-api: FastAPI on Python 3.15, hash-locked deps, Chainguard image with 0 CVEs, k8s manifests. Local gates green: 6 tests, curation (24 pkgs), Trivy fs/config/image, Hadolint, Dockle, Kyverno, gitleaks, Semgrep/Bandit, ZAP API scan (0 FAIL / 119 PASS). Fixes found by the gates: pip's vendored setuptools CVE (pip removed from runtime), Dependabot docker cooldown (template fixed)
   - [ ] orders-api
-- [ ] **3. Publish**: confirm with Blaise before the first push; create repos; apply governance
+- [x] **3. Publish** (2026-11-18, public repos + hardening): org hardening (no member repo creation, outside-contributor workflow approval, 7-day retention), teams, custom properties, `paved-road-baseline` security configuration (public repos only, so GHAS never bills a private repo), Actions allowlist with SHA pinning required, OIDC subject. Platform published and released as v1.0.0 (`971de5ed`); first platform-ci run green (14 jobs, 8 tools in the Security tab). payments-api onboarded live (properties, teams, staging + production with appsec reviewer) and pinned to v1.0.0. Org ruleset applied last. Commits use the GitHub noreply address
 - [ ] **4. First green run**: PR through all gates; merge → build, DAST, SBOM, sign, attest; verify
 - [ ] **5. Admission**: CI test and local kind demo
 - [ ] **6. Release and operate**: staging → production; triage; Scorecard; fleet onboarding and report
