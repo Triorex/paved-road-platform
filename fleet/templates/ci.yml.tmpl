@@ -80,8 +80,18 @@ jobs:
       digest: ${{ needs.build.outputs.digest }}
       environment: production
     permissions:
-      contents: write # record the production release
-      actions: read # read who approved the deployment
+      contents: read
       packages: write
       id-token: write
       attestations: write
+
+  record-release:
+    name: record-release
+    needs: [build, production]
+    uses: Triorex/paved-road-platform/.github/workflows/record-release.yml@{{PLATFORM_SHA}} # {{PLATFORM_VERSION}}
+    with:
+      image: ${{ needs.build.outputs.image }}
+      digest: ${{ needs.build.outputs.digest }}
+    permissions:
+      contents: write # create the release and its tag
+      actions: read # read who approved the production deployment
