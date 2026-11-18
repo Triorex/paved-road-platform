@@ -1,6 +1,8 @@
 {
   "name": "paved-road-baseline",
-  "description": "Org baseline for every repo: secret scanning with push protection, Dependabot, dependency graph, private vulnerability reporting. Code scanning runs through the paved-road workflows (advanced setup), so default setup stays off.",
+  "description": "Public-repo baseline: secret scanning + push protection, Dependabot, dependency graph, private vuln reporting. Public only, so GHAS never bills a private repo. Code scanning runs via paved-road workflows.",
+  "secret_protection": "enabled",
+  "code_security": "enabled",
   "dependency_graph": "enabled",
   "dependency_graph_autosubmit_action": "enabled",
   "dependabot_alerts": "enabled",

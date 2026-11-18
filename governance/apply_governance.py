@@ -5,7 +5,7 @@ Idempotent: safe to re-run. Dry-run by default; pass --apply to make changes.
 
   teams                 appsec, platform, payments-team, orders-team
   custom properties     paved-road, ring, risk-tier, language, owner-team
-  security config       paved-road-baseline, enforced on every repo and default for new repos
+  security config       paved-road-baseline, enforced on every public repo and default for new public repos
   actions policy        selected actions only, SHA pinning required, read-only default token
   hardening             no member-created repos, read default, approval for every outside
                         contributor's workflow run, 7-day artifact and log retention
@@ -57,8 +57,8 @@ def ensure_security_configuration(gh: Gh, org: str) -> None:
     else:
         created = gh.call("POST", f"orgs/{org}/code-security/configurations", cfg)
         cid = (created or {}).get("id", "<new-id>")
-    gh.call("POST", f"orgs/{org}/code-security/configurations/{cid}/attach", {"scope": "all"})
-    gh.call("PUT", f"orgs/{org}/code-security/configurations/{cid}/defaults", {"default_for_new_repos": "all"})
+    gh.call("POST", f"orgs/{org}/code-security/configurations/{cid}/attach", {"scope": "public"})
+    gh.call("PUT", f"orgs/{org}/code-security/configurations/{cid}/defaults", {"default_for_new_repos": "public"})
 
 
 def ensure_actions_policy(gh: Gh, org: str) -> None:
