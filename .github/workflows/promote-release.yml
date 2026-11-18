@@ -3,19 +3,16 @@
 # pre-releases), so the fleet never adopts a platform version that has not reached production.
 name: promote-release
 
+# No inputs: the workflow promotes the newest release candidate it finds, so nobody can steer
+# what gets released by typing a parameter (Checkov CKV_GHA_7).
 on:
   workflow_dispatch:
-    inputs:
-      rc_tag:
-        description: Release candidate to promote (vX.Y.Z-rc.N)
-        type: string
-        required: true
 
 permissions: {}
 
 jobs:
   promote:
-    name: promote ${{ inputs.rc_tag }}
+    name: promote newest release candidate
     runs-on: ubuntu-24.04
     permissions:
       contents: write # create the final tag and release
@@ -35,15 +32,14 @@ jobs:
         id: evidence
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          RC_TAG: ${{ inputs.rc_tag }}
         run: |
           pip install --disable-pip-version-check -q pyyaml==6.0.3
-          python scripts/promote_release.py --rc-tag "$RC_TAG"
+          python scripts/promote_release.py
       - name: Create the final release on the candidate commit
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
-          RC_TAG: ${{ inputs.rc_tag }}
+          RC_TAG: ${{ steps.evidence.outputs.rc_tag }}
           RC_SHA: ${{ steps.evidence.outputs.rc_sha }}
         run: |
           set -euo pipefail

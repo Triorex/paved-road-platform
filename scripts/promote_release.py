@@ -24,6 +24,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 from prlib import http_json, load_yaml, summary  # noqa: E402
 
 API = "https://api.github.com"
+RC = re.compile(r"v\d+\.\d+\.\d+-rc\.\d+")
 
 
 def evaluate(platform_ci_ok: bool, ring0: list[dict]) -> tuple[bool, list[str]]:
@@ -42,16 +43,23 @@ def evaluate(platform_ci_ok: bool, ring0: list[dict]) -> tuple[bool, list[str]]:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--rc-tag", required=True)
+    ap.add_argument("--rc-tag", help="defaults to the newest release candidate (vX.Y.Z-rc.N pre-release)")
     ap.add_argument("--inventory", default=os.path.join(os.path.dirname(__file__), "..", "fleet", "inventory.yaml"))
     args = ap.parse_args(argv)
-    if not re.fullmatch(r"v\d+\.\d+\.\d+-rc\.\d+", args.rc_tag):
-        print(f"::error::{args.rc_tag} is not a release candidate tag (vX.Y.Z-rc.N)")
-        return 2
-
     hdrs = {"Authorization": f"Bearer {os.environ['GITHUB_TOKEN']}", "Accept": "application/vnd.github+json"}
     inv = load_yaml(args.inventory)
     org, platform = inv["org"], inv["platform_repo"]
+    if not args.rc_tag:
+        rcs = [r for r in http_json(f"{API}/repos/{platform}/releases?per_page=50", headers=hdrs)
+               if r["prerelease"] and RC.fullmatch(r["tag_name"])]
+        if not rcs:
+            print("::error::no release candidate (vX.Y.Z-rc.N pre-release) to promote")
+            return 2
+        args.rc_tag = max(rcs, key=lambda r: r["created_at"])["tag_name"]
+    if not RC.fullmatch(args.rc_tag):
+        print(f"::error::{args.rc_tag} is not a release candidate tag (vX.Y.Z-rc.N)")
+        return 2
+
     rc_sha = http_json(f"{API}/repos/{platform}/commits/{args.rc_tag}", headers=hdrs)["sha"]
 
     runs = http_json(f"{API}/repos/{platform}/actions/runs?head_sha={rc_sha}&per_page=50", headers=hdrs).get("workflow_runs", [])
@@ -95,7 +103,7 @@ def main(argv: list[str] | None = None) -> int:
     summary(text)
     if os.environ.get("GITHUB_OUTPUT"):
         with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
-            fh.write(f"rc_sha={rc_sha}\n")
+            fh.write(f"rc_sha={rc_sha}\nrc_tag={args.rc_tag}\n")
     with open("rc-evidence.md", "w", encoding="utf-8") as fh:
         fh.write(text + "\n")
     return 0 if ok else 1
