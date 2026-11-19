@@ -149,7 +149,7 @@ a { color: var(--accent); }
 <div class="page">
 
 <header class="doc">
-  <div class="eyebrow">Design document · v1.1 · November 19, 2026</div>
+  <div class="eyebrow">Design document · v1.2 · November 19, 2026</div>
   <h1>Paved Road</h1>
   <p class="lede">An end-to-end secure software supply chain on GitHub Actions, built so that one central set of reusable workflows protects a fleet of about 80 repositories, from the developer's laptop to production.</p>
   <div class="meta">
@@ -168,7 +168,7 @@ a { color: var(--accent); }
   <div class="sec-head"><span class="sec-num">§1</span><h2>The workflow at a glance</h2></div>
   <figure>
     <div class="fig-frame wide">
-      <svg class="flow" viewBox="0 0 1320 770" role="img" aria-label="Paved Road workflow. A central platform repository supplies pinned reusable workflows to payments-api, orders-api and 78 more repositories. Every repository passes through six stages: Develop, Pull request, Build and test, Sign and attest, Verify and release, and Operate, each listing its security controls. Admission tests and DAST run against the deployed staging workload, and production requires their signed evidence. Findings from Operate loop back to Develop as GitHub Issues with SLAs. A control plane of OIDC credentials, central policy, risk exceptions, governance as code and a fleet report applies to every stage.">
+      <svg class="flow" viewBox="0 0 1320 770" role="img" aria-label="Paved Road workflow. A central platform repository supplies pinned reusable workflows to payments-api, orders-api and 78 more repositories. Every repository passes through six stages: Develop, Pull request, Build and test, Sign and attest, Verify and release, and Operate, each listing its security controls. Code moves through three environments: dev (any branch, for developer testing), staging (QA and security validation: admission tests and DAST against the deployed workload, then a QA sign-off) and production, which requires all of that signed evidence. Findings from Operate loop back to Develop as GitHub Issues with SLAs. A control plane of OIDC credentials, central policy, risk exceptions, governance as code and a fleet report applies to every stage.">
         <defs>
           <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
             <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
@@ -287,15 +287,16 @@ a { color: var(--accent); }
           <rect class="band" x="905" y="171" width="194" height="50" rx="5"/>
           <text class="mono t-accent" x="918" y="192" font-size="11" font-weight="600">05</text>
           <text class="disp t-ink" x="940" y="192" font-size="14" font-weight="600">VERIFY &amp; RELEASE</text>
-          <text class="mono t-muted" x="918" y="210" font-size="10">staging-verify.yml</text>
-          <circle class="dot-live" cx="918" cy="238" r="4"/><text class="t-ink" x="930" y="242" font-size="11" font-weight="600">Promote to staging</text><text class="t-muted" x="930" y="255" font-size="10">evidence verified · by digest</text>
-          <circle class="dot-live" cx="918" cy="269" r="4"/><text class="t-ink" x="930" y="273" font-size="11" font-weight="600">Admission cases</text><text class="t-muted" x="930" y="286" font-size="10">kind + Kyverno verifyImages</text>
-          <circle class="dot-live" cx="918" cy="300" r="4"/><text class="t-ink" x="930" y="304" font-size="11" font-weight="600">Pod security</text><text class="t-muted" x="930" y="317" font-size="10">non-root · no :latest</text>
+          <text class="mono t-muted" x="918" y="210" font-size="10">dev → staging → prod</text>
+          <circle class="dot-live" cx="918" cy="238" r="4"/><text class="t-ink" x="930" y="242" font-size="11" font-weight="600">Promote to dev</text><text class="t-muted" x="930" y="255" font-size="10">any branch · dev testing</text>
+          <circle class="dot-live" cx="918" cy="269" r="4"/><text class="t-ink" x="930" y="273" font-size="11" font-weight="600">Promote to staging</text><text class="t-muted" x="930" y="286" font-size="10">main only · dev evidence</text>
+          <circle class="dot-live" cx="918" cy="300" r="4"/><text class="t-ink" x="930" y="304" font-size="11" font-weight="600">Admission cases</text><text class="t-muted" x="930" y="317" font-size="10">kind + Kyverno · pod rules</text>
           <circle class="dot-live" cx="918" cy="331" r="4"/><text class="t-ink" x="930" y="335" font-size="11" font-weight="600">DAST on staging</text><text class="t-muted" x="930" y="348" font-size="10">OWASP ZAP → signed result</text>
-          <circle class="dot-live" cx="918" cy="362" r="4"/><text class="t-ink" x="930" y="366" font-size="11" font-weight="600">Production gate</text><text class="t-muted" x="930" y="379" font-size="10">approval + DAST evidence</text>
-          <circle class="dot-live" cx="918" cy="393" r="4"/><text class="t-ink" x="930" y="397" font-size="11" font-weight="600">Forward-only</text><text class="t-muted" x="930" y="410" font-size="10">never moves backwards</text>
-          <circle class="dot-live" cx="918" cy="424" r="4"/><text class="t-ink" x="930" y="428" font-size="11" font-weight="600">Release record</text><text class="t-muted" x="930" y="441" font-size="10">GitHub Release after prod</text>
-          <circle class="dot-design" cx="918" cy="455" r="4"/><text class="t-ink" x="930" y="459" font-size="11" font-weight="600">AWS target</text><text class="t-design" x="930" y="472" font-size="10">EKS · ECR · Terraform OIDC</text>
+          <circle class="dot-live" cx="918" cy="362" r="4"/><text class="t-ink" x="930" y="366" font-size="11" font-weight="600">QA sign-off</text><text class="t-muted" x="930" y="379" font-size="10">qa approval · pentest gate</text>
+          <circle class="dot-live" cx="918" cy="393" r="4"/><text class="t-ink" x="930" y="397" font-size="11" font-weight="600">Production gate</text><text class="t-muted" x="930" y="410" font-size="10">appsec · DAST + QA evidence</text>
+          <circle class="dot-live" cx="918" cy="424" r="4"/><text class="t-ink" x="930" y="428" font-size="11" font-weight="600">Forward-only</text><text class="t-muted" x="930" y="441" font-size="10">staging and production</text>
+          <circle class="dot-live" cx="918" cy="455" r="4"/><text class="t-ink" x="930" y="459" font-size="11" font-weight="600">Release record</text><text class="t-muted" x="930" y="472" font-size="10">GitHub Release after prod</text>
+          <circle class="dot-design" cx="918" cy="486" r="4"/><text class="t-ink" x="930" y="490" font-size="11" font-weight="600">API pentest · AWS</text><text class="t-design" x="930" y="503" font-size="10">pentest workflow · EKS, ECR</text>
         </g>
         <line class="wire" x1="1101" y1="196" x2="1122" y2="196" marker-end="url(#ah)"/>
 
@@ -335,7 +336,7 @@ a { color: var(--accent); }
       </svg>
     </div>
     <span class="scroll-hint">Scroll sideways to see the whole diagram →</span>
-    <figcaption>Every repository in the fleet calls the same pinned workflows from the central platform repo. A change moves left to right through six stages, and a failed gate stops it. A signature proves the digest was built by the paved road and passed its tests and image scan; production also requires signed evidence that the same digest passed staging, admission and DAST, and it never moves backwards. Findings from operations loop back to the developer as tracked issues with deadlines.</figcaption>
+    <figcaption>Every repository in the fleet calls the same pinned workflows from the central platform repo. A change moves left to right through six stages, and a failed gate stops it. A signature proves the digest was built by the paved road and passed its tests and image scan. Developers test any branch in dev; only main builds go further. Production requires signed evidence that the same digest passed dev, staging, admission, DAST and QA sign-off, and it never moves backwards. Findings from operations loop back to the developer as tracked issues with deadlines.</figcaption>
   </figure>
 </section>
 
@@ -409,12 +410,16 @@ a { color: var(--accent); }
         <tr><td>SBOM</td><td>Syft, CycloneDX JSON</td><td>Not a gate; feeds attestation and incident lookups</td><td><code>secure-build.yml</code></td><td><span class="pill live">Live</span></td></tr>
         <tr><td>Keyless signature</td><td>cosign with Sigstore Fulcio and Rekor, using the job's OIDC token</td><td>Signing fails, so the image stays undeployable</td><td><code>secure-build.yml</code></td><td><span class="pill live">Live</span></td></tr>
         <tr><td>SBOM attestation and SLSA provenance</td><td><code>cosign attest</code> (read by Kyverno); <code>actions/attest</code> SBOM and <code>actions/attest-build-provenance</code> (read at release)</td><td>Attestation fails, so promotion is refused later</td><td><code>secure-build.yml</code></td><td><span class="pill live">Live</span></td></tr>
-        <tr class="group"><td colspan="5">05 · Release and verify (release.yml, staging-verify.yml)</td></tr>
+        <tr class="group"><td colspan="5">05 · Verify and release: dev → staging → production (release.yml, staging-verify.yml, qa-signoff.yml)</td></tr>
+        <tr><td>Dev environment</td><td>Every main build, or any branch on demand (Run workflow); signature, provenance and SBOM verified; signed promotion record</td><td>Unsigned or unattested digest. No approval; may move backwards</td><td><code>release.yml</code>, caller <code>ci.yml</code></td><td><span class="pill live">Live</span></td></tr>
+        <tr><td>Main-only beyond dev</td><td>Environment branch policies, caller condition, and <code>gh attestation verify --source-ref refs/heads/main</code></td><td>A branch build tries to reach staging or production</td><td><code>release.yml</code>, <code>governance/environments.json</code></td><td><span class="pill live">Live</span></td></tr>
         <tr><td>Staging verification</td><td>After staging: kind + Kyverno admission cases (signed admitted; unsigned and privileged denied), then deploy the app's own manifests at the staging digest</td><td>Any admission case fails, or the workload doesn't become healthy</td><td><code>staging-verify.yml</code></td><td><span class="pill live">Live</span></td></tr>
         <tr><td>DAST</td><td>OWASP ZAP API scan against the deployed workload through its Kubernetes Service; the result is a signed attestation with alert counts</td><td>High-risk alert not listed in the ZAP rules file (gate mode set in the policy file)</td><td><code>staging-verify.yml</code>, <code>security/zap-rules.tsv</code></td><td><span class="pill live">Live</span></td></tr>
         <tr><td>Signature and pod policy</td><td>Kyverno <code>verifyImages</code>, approved registry, non-root, read-only root filesystem, no <code>:latest</code></td><td>Image not signed by the central workflow, or pod breaks policy</td><td><code>policies/kyverno/</code></td><td><span class="pill live">Live</span></td></tr>
-        <tr><td>Environments and promotion</td><td>GitHub environments (staging, production) with required reviewers; signature, provenance and SBOM re-verified; exact copy by digest; signed promotion record per environment</td><td>Missing approval or evidence; the tag doesn't resolve to the signed digest</td><td><code>release.yml</code></td><td><span class="pill live">Live</span></td></tr>
-        <tr><td>Production evidence</td><td><code>gh attestation verify --signer-workflow</code>: a signed "promoted to staging" record and a passing staging DAST attestation for the same digest</td><td>Staging skipped, or no passing DAST result</td><td><code>release.yml</code></td><td><span class="pill live">Live</span></td></tr>
+        <tr><td>Environments and promotion</td><td>GitHub environments (dev, staging, qa-signoff, production) with required reviewers; staging needs a signed dev promotion; signature, provenance and SBOM re-verified; exact copy by digest; signed promotion record per environment</td><td>Missing approval or evidence; the tag doesn't resolve to the signed digest</td><td><code>release.yml</code></td><td><span class="pill live">Live</span></td></tr>
+        <tr><td>QA sign-off</td><td><code>qa-signoff</code> environment, approved by the <code>qa</code> team after testing in staging; requires staging DAST; applies the API pentest gate (<code>gates.api_pentest.mode</code>); signed QA attestation</td><td>No staging verification, or the pentest gate is enforced and no passing pentest result exists</td><td><code>qa-signoff.yml</code></td><td><span class="pill live">Live</span></td></tr>
+        <tr><td>API penetration test</td><td>Pentest of the API in staging, recorded as a signed <code>api-pentest/v1</code> attestation</td><td>When enforced: QA cannot sign off without a pass</td><td><code>security-policy.yml</code> (mode <code>off</code>)</td><td><span class="pill design">Design</span></td></tr>
+        <tr><td>Production evidence</td><td><code>gh attestation verify --signer-workflow</code>: a signed "promoted to staging" record, a passing staging DAST attestation and an approved QA sign-off for the same digest</td><td>Staging skipped, no passing DAST result, or no QA sign-off</td><td><code>release.yml</code></td><td><span class="pill live">Live</span></td></tr>
         <tr><td>Forward-only promotion</td><td>Compare API against the commit of the latest successful deployment; one promotion per environment at a time (queue, never cancel)</td><td>The commit is older than what's deployed</td><td><code>release.yml</code></td><td><span class="pill live">Live</span></td></tr>
         <tr><td>Release record</td><td>GitHub Release created only after production, naming the approver</td><td>Not a gate; the releases list is exactly what reached production</td><td><code>record-release.yml</code></td><td><span class="pill live">Live</span></td></tr>
         <tr><td>AWS production target</td><td>Terraform: OIDC role for GitHub, ECR with immutable tags and scan on push, KMS, EKS</td><td>Not applied; scanned by Checkov in stage 02</td><td><code>infra/terraform/</code></td><td><span class="pill design">Design</span></td></tr>
@@ -497,7 +502,7 @@ a { color: var(--accent); }
         <tr><td class="stage">Versioning</td><td>Every change ships first as a release candidate (<code>v1.1.0-rc.1</code>). <code>promote-release.yml</code> publishes the final version only after ring 0 reached production on it. Broken versions are marked <code>[WITHDRAWN]</code>, never deleted. App repos pin a full commit SHA; Dependabot opens the upgrade PR.</td><td><span class="pill live">Live</span></td></tr>
         <tr><td class="stage">Safe rollout</td><td>Rings recorded in <code>fleet/inventory.yaml</code>: ring 0 is payments-api, ring 1 is 5 pilot repos, ring 2 is everyone. A candidate becomes final only after ring 0 reaches production on it; then ring 1, then ring 2. Pipeline contract tests run on every platform PR.</td><td><span class="pill live">Live</span></td></tr>
         <tr><td class="stage">Onboarding</td><td><code>fleet/onboard.py</code> opens an onboarding PR in each repo (caller workflow, Dependabot, CODEOWNERS), creates environments, applies branch rules, and turns on secret scanning with push protection. Dry-run by default.</td><td><span class="pill live">Live on payments-api</span><br><span class="pill design">orders-api next · dry-run on 78</span></td></tr>
-        <tr><td class="stage">Environments</td><td><code>release.yml</code> takes the environment as an input. Staging and production exist in every repo, created through the API, with required reviewers and deploys from <code>main</code> only. One promotion per environment runs at a time, and an environment never moves backwards.</td><td><span class="pill live">Live</span></td></tr>
+        <tr><td class="stage">Environments</td><td><code>release.yml</code> takes the environment as an input. Dev, staging, qa-signoff and production exist in every repo, created through the API. Dev takes any branch with no approval; the others take <code>main</code> only, with qa and appsec reviewers on qa-signoff and production. One promotion per environment runs at a time, and staging and production never move backwards.</td><td><span class="pill live">Live</span></td></tr>
         <tr><td class="stage">Credentials</td><td>OIDC only. The org's token subject is customized to include <code>job_workflow_ref</code>, so in AWS the deploy role trusts only the production environment and only the central release workflow.</td><td><span class="pill live">OIDC subject live</span><br><span class="pill design">AWS role design</span></td></tr>
         <tr><td class="stage">One policy for all</td><td>Kyverno trusts a single signer identity, so adding repo 81 needs no policy change.</td><td><span class="pill live">Live</span></td></tr>
         <tr><td class="stage">Visibility</td><td><code>fleet/compliance_report.py</code> reports per repo: calls the paved road, pinned version, branch rules on, secret scanning on. This is the adoption KPI for leadership.</td><td><span class="pill live">Live</span></td></tr>
@@ -521,6 +526,7 @@ a { color: var(--accent); }
   secure-build.yml     reusable
   release.yml          reusable
   staging-verify.yml   reusable
+  qa-signoff.yml       reusable
   record-release.yml   reusable
   promote-release.yml  rc → final
   platform-ci.yml      tests + lint
@@ -558,7 +564,7 @@ deploy/k8s/          Deployment
   exceptions.yaml    owner + expiry
 .github/
   workflows/
-    ci.yml           caller, 6 jobs
+    ci.yml           caller, 8 jobs
     scorecard.yml
     security-triage.yml
     registry-cleanup.yml
@@ -640,7 +646,8 @@ SECURITY.md</pre>
       <li>CI: staging verify admits the signed image and denies unsigned and privileged ones, before ZAP runs.</li>
       <li>Laptop: the same demo on a local kind cluster.</li></ul></li>
     <li><h3>Release and operate</h3><ul>
-      <li>Promote staging to production with approval, DAST evidence and forward-only checks; the GitHub Release is recorded only after production.</li>
+      <li>Promote dev → staging → production: QA signs off in staging, appsec approves production, with DAST and QA evidence and forward-only checks; the GitHub Release is recorded only after production.</li>
+      <li>Developers deploy any branch to dev with Run workflow; branch builds never go further.</li>
       <li>Ship platform changes as <code>-rc.N</code>, prove them in ring 0, then promote to final.</li>
       <li>Run triage, Scorecard, fleet onboarding (live on payments-api, dry-run on 78) and the compliance report.</li></ul></li>
     <li><h3>Docs and walkthrough</h3><ul>
@@ -714,7 +721,7 @@ SECURITY.md</pre>
           <tr><td>Supply-chain events blocked</td><td>Reported monthly</td></tr>
           <tr><td>False-positive rate on blocking rules</td><td>Under 10%</td></tr>
           <tr><td>PR security check time</td><td>Under 10 minutes</td></tr>
-          <tr><td>Push to staging</td><td>Under 5 minutes (about 4 today)</td></tr>
+          <tr><td>Push to dev / staging</td><td>Under 5 minutes each</td></tr>
         </tbody>
       </table>
     </div>
@@ -722,7 +729,7 @@ SECURITY.md</pre>
 </section>
 
 <footer>
-  Paved Road design document, v1.1 (platform v1.1.0). Standards referenced: NIST SSDF (SP 800-218), SLSA v1.0 build levels, OWASP SAMM, CIS Software Supply Chain Security Guide. Tool versions are pinned in the workflows themselves.
+  Paved Road design document, v1.2 (platform v1.2.0: dev, staging, production). Standards referenced: NIST SSDF (SP 800-218), SLSA v1.0 build levels, OWASP SAMM, CIS Software Supply Chain Security Guide. Tool versions are pinned in the workflows themselves.
 </footer>
 
 </div>

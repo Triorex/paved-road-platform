@@ -1,18 +1,22 @@
 # Paved Road · release (reusable)
 #
 # Promotes ONE immutable, signed digest into an environment. Called once per environment by the
-# app repo (staging, then production). Rules this workflow enforces:
+# app repo: dev, then staging, then (after staging-verify and QA sign-off) production.
+# Rules this workflow enforces:
 #
 #   1. The digest must carry a keyless signature, SLSA provenance and an SBOM attestation from the
 #      central secure-build workflow.
-#   2. Production only accepts a digest that has a signed "promoted to staging" attestation, so
-#      staging cannot be skipped and no other image can be promoted.
-#   3. Promotion is an exact copy: the environment tag must resolve to the signed digest itself.
-#   4. Production also requires a passing, signed DAST attestation from staging-verify.yml
-#      (ZAP against the workload deployed at this digest).
-#   5. An environment never moves backwards: the commit must equal or descend from the commit
-#      currently deployed there. Roll back by rolling forward (revert on main). One promotion per
-#      environment runs at a time.
+#   2. Dev accepts any branch (developer testing). Staging and production accept only a build of
+#      refs/heads/main (checked on the provenance itself), so a branch build can never leave dev.
+#   3. Each environment requires a signed promotion attestation from the one before it:
+#      staging needs dev, production needs staging. No stage can be skipped.
+#   4. Promotion is an exact copy: the environment tag must resolve to the signed digest itself.
+#   5. Production also requires a passing, signed DAST attestation from staging-verify.yml and a
+#      signed QA sign-off from qa-signoff.yml (which in turn enforces the API pentest gate when
+#      security-policy.yml turns it on).
+#   6. Staging and production never move backwards: the commit must equal or descend from the
+#      commit deployed there. Roll back by rolling forward (revert on main). Dev may move anywhere.
+#      One promotion per environment runs at a time.
 #   6. Every promotion is recorded as a signed promotion attestation for that digest.
 #   7. A GitHub Release is created only when production promotion succeeds (record-release.yml,
 #      called by the production job only), so the releases list shows exactly what reached production.
@@ -30,7 +34,7 @@ on:
         type: string
         required: true
       environment:
-        description: staging | production
+        description: dev | staging | production
         type: string
         required: true
 
@@ -42,9 +46,11 @@ env:
   BUILD_WORKFLOW: Triorex/paved-road-platform/.github/workflows/secure-build.yml
   RELEASE_WORKFLOW: Triorex/paved-road-platform/.github/workflows/release.yml
   VERIFY_WORKFLOW: Triorex/paved-road-platform/.github/workflows/staging-verify.yml
+  QA_WORKFLOW: Triorex/paved-road-platform/.github/workflows/qa-signoff.yml
   OIDC_ISSUER: https://token.actions.githubusercontent.com
   PROMOTION_TYPE: https://triorex.dev/attestations/promotion/v1
   DAST_TYPE: https://triorex.dev/attestations/dast/v1
+  QA_TYPE: https://triorex.dev/attestations/qa-signoff/v1
 
 jobs:
   promote:
@@ -67,7 +73,7 @@ jobs:
       IMAGE: ${{ inputs.image }}
       DIGEST: ${{ inputs.digest }}
       TARGET_ENV: ${{ inputs.environment }}
-      REQUIRED_PRIOR: ${{ inputs.environment == 'production' && 'staging' || '' }}
+      REQUIRED_PRIOR: ${{ inputs.environment == 'production' && 'staging' || inputs.environment == 'staging' && 'dev' || '' }}
     steps:
       - uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
         with:
@@ -85,16 +91,29 @@ jobs:
           cosign verify "$IMAGE@$DIGEST" \
             --certificate-identity-regexp "$SIGNER_REGEX" --certificate-oidc-issuer "$OIDC_ISSUER" > /dev/null
           echo "signature verified: signed by the central secure-build workflow"
+      - name: Only main-branch builds go beyond dev
+        if: inputs.environment != 'dev'
+        env:
+          REF: ${{ github.ref }}
+        run: |
+          if [ "$REF" != "refs/heads/main" ]; then
+            echo "::error::$TARGET_ENV accepts only builds of main; this run is on $REF (branch builds stop at dev)"
+            exit 1
+          fi
+          echo "run is on main"
       - name: Verify SLSA provenance and SBOM attestations (GitHub)
         env:
           GH_TOKEN: ${{ github.token }}
           OWNER: ${{ github.repository_owner }}
+          SOURCE_REF: ${{ inputs.environment != 'dev' && 'refs/heads/main' || '' }}
         run: |
           set -euo pipefail
+          ref_flag=()
+          [ -n "$SOURCE_REF" ] && ref_flag=(--source-ref "$SOURCE_REF")
           for type in https://slsa.dev/provenance/v1 https://cyclonedx.org/bom; do
             gh attestation verify "oci://$IMAGE@$DIGEST" --owner "$OWNER" \
-              --signer-workflow "$BUILD_WORKFLOW" --predicate-type "$type" > /dev/null
-            echo "attestation verified: $type"
+              --signer-workflow "$BUILD_WORKFLOW" --predicate-type "$type" "${ref_flag[@]}" > /dev/null
+            echo "attestation verified: $type${SOURCE_REF:+ (built from $SOURCE_REF)}"
           done
       - name: Require evidence from the previous environment
         if: env.REQUIRED_PRIOR != ''
@@ -136,7 +155,27 @@ jobs:
             exit 1
           fi
           echo "verified: DAST passed in staging; alerts $(jq -c '[.[].verificationResult.statement.predicate.alerts] | last' dast.json)"
+      - name: Require QA sign-off from staging
+        if: inputs.environment == 'production'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          set -euo pipefail
+          if ! gh attestation verify "oci://$IMAGE@$DIGEST" --owner "$OWNER" \
+                 --signer-workflow "$QA_WORKFLOW" --predicate-type "$QA_TYPE" \
+                 --format json > qa.json 2> verify.err; then
+            cat verify.err
+            echo "::error::$DIGEST has no QA sign-off; QA has not approved it in staging"
+            exit 1
+          fi
+          if ! jq -e '[.[].verificationResult.statement.predicate | select(.result == "approved" and .environment == "staging")] | length > 0' qa.json > /dev/null; then
+            echo "::error::no approved staging QA sign-off for $DIGEST"
+            exit 1
+          fi
+          echo "verified: QA signed off in staging; $(jq -r '[.[].verificationResult.statement.predicate] | last | "approved by \(.approvers), API pentest \(.api_pentest)"' qa.json)"
       - name: Refuse to move the environment backwards
+        if: inputs.environment != 'dev'
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
@@ -198,7 +237,9 @@ jobs:
             echo "## Promoted to \`$TARGET_ENV\`"
             echo "- Digest: \`$DIGEST\` (tag \`$TARGET_ENV\` verified to resolve to it)"
             echo "- Verified: keyless signature, SLSA provenance, CycloneDX SBOM attestation"
-            [ -n "$REQUIRED_PRIOR" ] && echo "- Required evidence: signed promotion to \`$REQUIRED_PRIOR\` and a passing DAST attestation"
-            echo "- Order: commit is not behind what \`$TARGET_ENV\` already runs"
+            [ -n "$REQUIRED_PRIOR" ] && echo "- Required evidence: signed promotion to \`$REQUIRED_PRIOR\`"
+            [ "$TARGET_ENV" = production ] && echo "- Required evidence: passing staging DAST and an approved QA sign-off"
+            [ "$TARGET_ENV" != dev ] && echo "- Source: built from \`main\`; commit is not behind what \`$TARGET_ENV\` already runs"
+            [ "$TARGET_ENV" = dev ] && echo "- Dev: any branch, may move backwards (developer testing; never promotable from a branch)"
             echo "- Recorded: signed promotion attestation (\`$PROMOTION_TYPE\`)"
           } >> "$GITHUB_STEP_SUMMARY"
