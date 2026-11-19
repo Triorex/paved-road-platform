@@ -5,7 +5,8 @@ Because the ruleset and security configuration live at org level, onboarding a r
   1. set its custom properties (paved-road=true, ring, risk-tier, language, owner-team)
      -> the org ruleset and the paved-road-baseline security configuration now apply
   2. grant team access (owner team write, appsec + platform write for CODEOWNERS reviews)
-  3. create the staging and production environments (production requires an appsec reviewer)
+  3. create the dev, staging, qa-signoff and production environments (dev takes any branch;
+     qa-signoff requires a qa reviewer; production requires an appsec reviewer)
   4. if the repo has no paved-road caller yet, open an onboarding PR with the rendered templates
 
 Dry-run by default. Repos marked `real: false` model the enterprise fleet and are only planned.
@@ -83,6 +84,8 @@ def onboard(gh: Gh, org: str, repo: dict, sha: str, version: str, team_ids: dict
         gh.call("PUT", f"orgs/{org}/teams/{team}/repos/{org}/{name}", {"permission": perm})
     envs = load_yaml(os.path.join(HERE, "..", "governance", "environments.json"))
     for env, cfg in envs.items():
+        if env.startswith("_"):
+            continue
         body = {"wait_timer": cfg.get("wait_timer", 0),
                 "prevent_self_review": cfg.get("prevent_self_review", False),
                 "reviewers": [{"type": "Team", "id": team_ids.get(t, 0)} for t in cfg.get("reviewer_teams", [])],

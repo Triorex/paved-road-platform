@@ -43,12 +43,15 @@ PR GATES      pr-security.yml: secrets (GHAS + gitleaks) · SAST (CodeQL, Semgre
               · SCA (dependency review, OSV-Scanner, Trivy fs, licenses) · curation
               · IaC (Checkov, Trivy config) · workflow lint (zizmor, actionlint, SHA pins)
               · policy (Kyverno CLI) · exception expiry
-BUILD         secure-build.yml: unit tests → Hadolint → build on Chainguard → push GHCR by digest
-              → Trivy image + Dockle → DAST (OWASP ZAP) → SBOM (Syft) → cosign sign + attest
-              → SLSA provenance          (signing runs last: a signature means every gate passed)
-STAGING       release.yml (staging) → staging-verify.yml: kind + Kyverno admission (signed admitted,
-              unsigned/privileged denied), deploy app manifests, OWASP ZAP → signed DAST attestation
-RELEASE       release.yml: staging → production (required reviewer), attestations verified, promote by digest
+BUILD         secure-build.yml: [unit tests] + [Hadolint → build on Chainguard → push GHCR by digest
+              → Trivy image + Dockle] → SBOM (Syft) → cosign sign + attest → SLSA provenance
+DEV           release.yml (dev): every main build, or any branch on demand; developer testing, no approval
+STAGING       release.yml (staging, main only, needs dev evidence) → staging-verify.yml: kind + Kyverno
+              admission, deploy app manifests, OWASP ZAP → signed DAST attestation
+QA SIGN-OFF   qa-signoff.yml: qa team approves after testing in staging; API pentest gate (policy, off)
+              → signed QA sign-off attestation
+RELEASE       release.yml: production (appsec reviewer), staging + DAST + QA evidence, forward-only,
+              promote by digest → GitHub Release (ADR 0004)
 OPERATE       vuln-triage.yml (KEV + EPSS → issues with SLA) · scorecard.yml · Dependabot · fleet report
 ```
 

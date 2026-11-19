@@ -29,9 +29,12 @@ flowchart LR
     b2[Hadolint, build on Chainguard<br/>push by digest] --> b3[Trivy + Dockle]
     b1[Unit tests] & b3 --> b5[SBOM, cosign keyless sign,<br/>SLSA provenance]
   end
-  build --> stg[release.yml → staging<br/>verify, promote by digest]
+  branch[Any branch<br/>Run workflow] -.->|on demand| build
+  build --> devenv[release.yml → dev<br/>developer testing, no approval<br/>branch builds stop here]
+  devenv -->|main only| stg[release.yml → staging<br/>needs dev evidence, promote by digest]
   stg --> sv[staging-verify.yml<br/>kind + Kyverno admission,<br/>deploy, DAST: OWASP ZAP<br/>→ signed DAST attestation]
-  sv --> prod[release.yml → production<br/>approval, requires staging + DAST evidence,<br/>never moves backwards]
+  sv --> qa[qa-signoff.yml<br/>QA approves after testing in staging<br/>API pentest gate · signed QA sign-off]
+  qa --> prod[release.yml → production<br/>appsec approval, requires staging, DAST<br/>and QA evidence, never moves backwards]
   prod --> ops[vuln-triage.yml · Scorecard · Dependabot<br/>KEV + EPSS → issues with SLA]
   ops -.->|fix PR| dev
 ```
@@ -42,8 +45,9 @@ flowchart LR
 |---|---|
 | `.github/workflows/pr-security.yml` | All PR gates in parallel; one required check: `pr-security / gate` |
 | `.github/workflows/secure-build.yml` | Tests alongside build → image scan → SBOM, sign, attest (signing runs last) |
-| `.github/workflows/release.yml` | Verify signature, SBOM and provenance; promote one digest per environment; never backwards |
+| `.github/workflows/release.yml` | Verify signature, SBOM and provenance; promote one digest through dev → staging → production; main-only beyond dev; never backwards |
 | `.github/workflows/staging-verify.yml` | After staging: kind + Kyverno admission cases, deploy the app's manifests, OWASP ZAP, signed DAST attestation |
+| `.github/workflows/qa-signoff.yml` | QA approval gate (qa team) after staging verify; applies the API pentest gate; signed QA sign-off production requires |
 | `.github/workflows/vuln-triage.yml` | Alerts → CISA KEV + EPSS → GitHub Issues with SLA due dates; closes on clean rescan |
 | `security/security-policy.yml` | Every threshold and audit/enforce mode, for the whole fleet |
 | `security/semgrep/`, `gitleaks.toml`, `zap-rules.tsv` | Org-specific scanner rules |

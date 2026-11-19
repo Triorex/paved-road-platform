@@ -21,6 +21,9 @@ gates:
   image_scan:         { mode: enforce, severities: "HIGH,CRITICAL", ignore_unfixed: true }
   image_lint:         { mode: enforce, dockle_exit_level: fatal }
   dast:               { mode: enforce }                                # ZAP: FAIL rules in security/zap-rules.tsv
+  # API penetration test before production (planned). off: not required. enforce: QA cannot sign off
+  # (qa-signoff.yml) without a passing signed pentest attestation for the digest, so production needs it too.
+  api_pentest:        { mode: "off" }   # quoted: bare off is boolean false in YAML 1.1
 
 licenses:
   # SPDX identifiers allowed in shipped dependencies. Anything else needs an exception.

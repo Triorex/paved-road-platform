@@ -19,10 +19,11 @@ def test_keeps_promoted_newest_and_recent_and_deletes_old_unpromoted_with_compan
         v(5, D(5), [f"sha256-{3:064x}.att"], 15),                          # companion of 3 -> delete
         v(6, D(6), [f"sha256-{1:064x}.sig"], 20),                          # companion of promoted -> keep
         v(7, D(7), [], 30),                                                 # untagged -> always keep
+        v(8, D(8), ["sha-" + "8" * 40, "dev"], 25),                         # in dev (maybe a branch build) -> keep
     ]
     keep, delete = rc.plan(versions, keep_last=1, min_age_days=7, now=NOW)
     assert sorted(x["id"] for x in delete) == [3, 4, 5]
-    assert {1, 2, 6, 7} <= {x["id"] for x in keep}
+    assert {1, 2, 6, 7, 8} <= {x["id"] for x in keep}
 
 
 def test_keep_last_protects_recent_builds():

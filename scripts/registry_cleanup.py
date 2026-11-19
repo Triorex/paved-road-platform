@@ -5,7 +5,7 @@ Every build pushes an image (tag sha-<commit>) plus its signature (.sig), cosign
 (.att) and GitHub attestation referrer (sha256-<digest>). Most builds are never promoted. This
 keeps the registry to what matters:
 
-  KEEP   images tagged staging or production (and anything they reference)
+  KEEP   images tagged dev, staging or production (and anything they reference)
   KEEP   the newest --keep-last sha-* images (rollback candidates and recent builds)
   KEEP   anything younger than --min-age-days, and every untagged version (it may be referenced)
   DELETE older, unpromoted sha-* images together with their .sig / .att / referrer companions
@@ -25,7 +25,7 @@ from prlib import http_json, summary  # noqa: E402
 
 BUILD_TAG = re.compile(r"^sha-[0-9a-f]{40}$")
 COMPANION = re.compile(r"^sha256-([0-9a-f]{64})(\.sig|\.att)?$")
-PROMOTED = {"staging", "production"}
+PROMOTED = {"dev", "staging", "production"}
 
 
 def plan(versions: list[dict], keep_last: int, min_age_days: int, now: dt.datetime) -> tuple[list[dict], list[dict]]:
