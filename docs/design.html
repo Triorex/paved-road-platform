@@ -149,7 +149,7 @@ a { color: var(--accent); }
 <div class="page">
 
 <header class="doc">
-  <div class="eyebrow">Design document · v1.3 · November 19, 2026</div>
+  <div class="eyebrow">Design document · v1.4 · November 19, 2026</div>
   <h1>Paved Road</h1>
   <p class="lede">An end-to-end secure software supply chain on GitHub Actions, built so that one central set of reusable workflows protects a fleet of about 80 repositories, from the developer's laptop to production.</p>
   <div class="meta">
@@ -743,6 +743,25 @@ SECURITY.md</pre>
       </tbody>
     </table>
   </div>
+  <h3>How a change moves, step by step</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Step</th><th>Command</th><th>What happens</th><th>Status</th></tr></thead>
+      <tbody>
+        <tr><td>Start from the trunk</td><td><code>git switch main &amp;&amp; git pull</code><br><code>git switch -c feature/&lt;name&gt;</code></td><td>Short-lived branch for one change</td><td><span class="pill live">Live</span></td></tr>
+        <tr><td>Test in dev</td><td><code>gh workflow run ci --ref feature/&lt;name&gt;</code></td><td>Build, scan, sign and deploy the branch to dev only; staging, QA sign-off and production are skipped</td><td><span class="pill live">Live</span></td></tr>
+        <tr><td>Review</td><td><code>gh pr create --base main</code><br><code>gh pr checks --watch</code></td><td>Code review and every PR gate; the ruleset needs <code>pr-security / gate</code></td><td><span class="pill live">Live</span></td></tr>
+        <tr><td>Merge</td><td><code>gh pr merge --squash</code></td><td>Merged into main, branch kept; main builds once and runs dev → staging → staging verify → QA sign-off → production</td><td><span class="pill live">Live</span></td></tr>
+        <tr><td>Direct push to main</td><td><code>git push origin main</code></td><td>Rejected by the org ruleset: main changes only through a reviewed, gated PR</td><td><span class="pill live">Live</span></td></tr>
+        <tr><td>What is in production</td><td><code>gh release list --limit 1</code><br><code>git log --oneline release-&lt;date&gt;-&lt;sha&gt;..main</code></td><td>The latest release is what production runs; the log shows what main has that production doesn't yet</td><td><span class="pill live">Live</span></td></tr>
+        <tr><td>Hotfix</td><td><code>git switch -c hotfix/&lt;name&gt; release-&lt;date&gt;-&lt;sha&gt;</code></td><td>Branch from exactly what production runs, PR to main, same pipeline</td><td><span class="pill live">Live</span></td></tr>
+        <tr><td>Stabilise a release</td><td><code>git switch -c release/x.y</code><br><code>git cherry-pick &lt;sha&gt;</code></td><td>Short release branch only when needed; fixes cherry-picked; still built once and promoted</td><td><span class="pill design">Design</span></td></tr>
+        <tr><td>Approve the newest build</td><td><code>gh run cancel &lt;id&gt;</code></td><td>Older runs waiting for approval are cancelled; the newest build contains them</td><td><span class="pill design">Design</span></td></tr>
+        <tr><td>Merge queue</td><td><code>gh pr merge --squash --auto</code></td><td>Each PR is tested on top of the PRs ahead of it before it lands</td><td><span class="pill design">Design</span></td></tr>
+        <tr><td>Production pointer</td><td><code>git tag -f production &lt;sha&gt;</code> (pipeline only)</td><td>A ref the pipeline moves after each production deploy; nobody merges into it</td><td><span class="pill design">Design</span></td></tr>
+      </tbody>
+    </table>
+  </div>
   <h3>Many developers on one repository</h3>
   <div class="table-wrap">
     <table>
@@ -775,7 +794,7 @@ SECURITY.md</pre>
 </section>
 
 <footer>
-  Paved Road design document, v1.3 (platform v1.2.0: dev, staging, production; branching and scale in §11). Standards referenced: NIST SSDF (SP 800-218), SLSA v1.0 build levels, OWASP SAMM, CIS Software Supply Chain Security Guide. Tool versions are pinned in the workflows themselves.
+  Paved Road design document, v1.4 (platform v1.2.0: dev, staging, production; branching, workflow commands and scale in §11). Standards referenced: NIST SSDF (SP 800-218), SLSA v1.0 build levels, OWASP SAMM, CIS Software Supply Chain Security Guide. Tool versions are pinned in the workflows themselves.
 </footer>
 
 </div>
