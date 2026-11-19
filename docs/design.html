@@ -149,7 +149,7 @@ a { color: var(--accent); }
 <div class="page">
 
 <header class="doc">
-  <div class="eyebrow">Design document · v1.2 · November 19, 2026</div>
+  <div class="eyebrow">Design document · v1.3 · November 19, 2026</div>
   <h1>Paved Road</h1>
   <p class="lede">An end-to-end secure software supply chain on GitHub Actions, built so that one central set of reusable workflows protects a fleet of about 80 repositories, from the developer's laptop to production.</p>
   <div class="meta">
@@ -728,8 +728,54 @@ SECURITY.md</pre>
   </div>
 </section>
 
+<!-- 11. BRANCHING AND SCALE -->
+<section id="branching">
+  <div class="sec-head"><span class="sec-num">§11</span><h2>Branching and scale</h2></div>
+  <p class="prose"><b>Decision: trunk-based development with build-once promotion.</b> Branches are code lines; environments are deployment targets. One signed digest moves through dev, staging and production, so what QA approved is byte-for-byte what ships. Environment branches (dev, staging and prod branches promoted by merges) were considered and rejected.</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Environment branches offer</th><th>Why that hurts</th><th>How this design gets the same benefit</th></tr></thead>
+      <tbody>
+        <tr><td>A review at every promotion</td><td>The promotion PR re-reviews a diff already reviewed on the feature PR, so it becomes a rubber stamp</td><td>Code review on the feature PR; QA and appsec approvals on the same digest, with signed evidence</td></tr>
+        <tr><td>A <code>prod</code> branch that shows what is live</td><td>Each merge makes a new commit, a new build and a new digest: production would ship an artifact QA and DAST never tested, and the signed evidence would not match</td><td>The production image tag, the GitHub Release recorded after each production deploy, and (planned) a <code>production</code> git ref the pipeline fast-forwards</td></tr>
+        <tr><td>Staging can hold a release while dev moves on</td><td>Branches drift; every hotfix must be back-merged; merge conflicts grow</td><td>Short release branches (<code>release/x.y</code>) only when a release must stabilise, still built once and promoted</td></tr>
+        <tr><td>A hotfix lane from production</td><td>Main lags behind production, so developers branch from stale code</td><td>Branch from the production release, PR to main, same pipeline</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <h3>Many developers on one repository</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>What breaks first</th><th>Effect</th><th>Plan</th><th>Status</th></tr></thead>
+      <tbody>
+        <tr><td>One shared dev environment</td><td>Branch deploys overwrite each other: last deploy wins</td><td>A preview environment per branch (<code>dev-&lt;branch&gt;</code> namespace), created on deploy and removed when the PR closes; shared dev tracks main</td><td><span class="pill design">Design</span></td></tr>
+        <tr><td>Approval fatigue</td><td>Every merge asks for a QA and a production approval</td><td>Approve the newest build only: it contains every earlier merge, a natural release train. Older waiting runs are cancelled; forward-only promotion would refuse them anyway</td><td><span class="pill design">Design</span></td></tr>
+        <tr><td>PRs green alone, broken together</td><td>Two PRs pass separately but conflict once both land on main</td><td>A merge queue tests each PR on top of everything ahead of it</td><td><span class="pill design">Design</span></td></tr>
+        <tr><td>Review rules</td><td>The demo requires no approving review (single maintainer)</td><td>One or more approvals, required code-owner review, no self-approval</td><td><span class="pill design">Design</span></td></tr>
+        <tr><td>Older build overtaking a newer one</td><td>A slow run promoted after a faster one would roll an environment back</td><td>Forward-only promotion and one promotion per environment at a time</td><td><span class="pill live">Live</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <h3>At enterprise scale in a regulated organisation</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Area</th><th>What this design would add</th></tr></thead>
+      <tbody>
+        <tr><td>Environments</td><td>More than three (dev, SIT, UAT, performance, pre-production), all promoting the same signed artifact</td></tr>
+        <tr><td>Change management</td><td>The pipeline opens and closes change records in the ITSM tool. Risk-based approval: low-risk changes with complete evidence go through as standard changes; high-risk ones go to a change advisory board</td></tr>
+        <tr><td>Release coordination</td><td>Release trains or short release branches, freeze windows, cross-service dependencies</td></tr>
+        <tr><td>Production rollout</td><td>Progressive delivery: canary or blue/green, feature flags, automated rollback on error rates</td></tr>
+        <tr><td>Developer throughput</td><td>Merge queues, per-branch preview environments, monorepo or polyrepo tooling, a platform team running the paved road</td></tr>
+        <tr><td>Legacy systems</td><td>Mainframe and vendor systems often keep release branches and slower cycles; the paved road covers modern services first</td></tr>
+        <tr><td>Audit</td><td>Evidence retained for years, tamper-evident and searchable per release, not only in CI logs</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="note prose">This implementation is a reference for the core pattern (one trunk, build once, promote a signed artifact, approvals backed by evidence). The items marked Design and the enterprise additions are the next layers, not claims about what runs today.</p>
+</section>
+
 <footer>
-  Paved Road design document, v1.2 (platform v1.2.0: dev, staging, production). Standards referenced: NIST SSDF (SP 800-218), SLSA v1.0 build levels, OWASP SAMM, CIS Software Supply Chain Security Guide. Tool versions are pinned in the workflows themselves.
+  Paved Road design document, v1.3 (platform v1.2.0: dev, staging, production; branching and scale in §11). Standards referenced: NIST SSDF (SP 800-218), SLSA v1.0 build levels, OWASP SAMM, CIS Software Supply Chain Security Guide. Tool versions are pinned in the workflows themselves.
 </footer>
 
 </div>
