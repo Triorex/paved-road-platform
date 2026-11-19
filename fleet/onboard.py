@@ -4,7 +4,8 @@
 Because the ruleset and security configuration live at org level, onboarding a repo is small:
   1. set its custom properties (paved-road=true, ring, risk-tier, language, owner-team)
      -> the org ruleset and the paved-road-baseline security configuration now apply
-  2. grant team access (owner team write, appsec + platform write for CODEOWNERS reviews)
+  2. grant team access (owner team write, appsec + platform write for CODEOWNERS reviews,
+     qa read so it can approve the qa-signoff environment)
   3. create the dev, staging, qa-signoff and production environments (dev takes any branch;
      qa-signoff requires a qa reviewer; production requires an appsec reviewer)
   4. if the repo has no paved-road caller yet, open an onboarding PR with the rendered templates
@@ -80,7 +81,8 @@ def onboard(gh: Gh, org: str, repo: dict, sha: str, version: str, team_ids: dict
         {"property_name": "language", "value": repo["language"]},
         {"property_name": "owner-team", "value": repo["owner_team"]},
     ]})
-    for team, perm in ((repo["owner_team"], "push"), ("appsec", "push"), ("platform", "push")):
+    # qa needs read access to be a required reviewer on the qa-signoff environment
+    for team, perm in ((repo["owner_team"], "push"), ("appsec", "push"), ("platform", "push"), ("qa", "pull")):
         gh.call("PUT", f"orgs/{org}/teams/{team}/repos/{org}/{name}", {"permission": perm})
     envs = load_yaml(os.path.join(HERE, "..", "governance", "environments.json"))
     for env, cfg in envs.items():
