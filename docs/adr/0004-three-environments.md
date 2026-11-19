@@ -51,3 +51,7 @@ merge to main ─────────────► build ─► DEV ─►
   caller; the template ships with it on.
 - `security-policy.yml` values that read as YAML 1.1 booleans (`off`, `on`, `yes`) must be quoted:
   the contract test caught `mode: off` parsing as `false` in Python while `yq` read `"off"`.
+- Ring 0 caught a defect on `v1.2.0-rc.1`: `qa-signoff.yml` read the DAST attestation from the
+  private registry before logging in, so QA sign-off failed closed after approval. Fixed in
+  `v1.2.0-rc.2`. A contract test now requires a registry login before any step that verifies an
+  attestation from the registry, in every workflow.
