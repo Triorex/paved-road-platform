@@ -102,3 +102,25 @@ def test_release_requires_qa_and_main_builds_beyond_dev():
     assert "--source-ref" in steps["Verify SLSA provenance and SBOM attestations (GitHub)"]["run"]
     prior = promote["env"]["REQUIRED_PRIOR"]
     assert "'staging'" in prior and "'dev'" in prior
+
+
+def test_registry_login_precedes_every_attestation_read_from_the_registry():
+    """gh attestation verify oci://... and cosign read from the private registry, so a job must log in
+    first. Found in ring 0 on v1.2.0-rc.1: qa-signoff checked the DAST attestation before logging in
+    and failed closed."""
+    wf_dir = os.path.join(ROOT, ".github", "workflows")
+    checked = 0
+    for name in sorted(os.listdir(wf_dir)):
+        if not name.endswith(".yml"):
+            continue
+        for job_name, job in (load(f".github/workflows/{name}").get("jobs") or {}).items():
+            logged_in = False
+            for step in job.get("steps") or []:
+                if "docker/login-action" in str(step.get("uses", "")):
+                    logged_in = True
+                commands = [ln.strip() for ln in str(step.get("run", "")).splitlines()]
+                commands = [ln for ln in commands if not ln.startswith("echo")]  # printed instructions don't count
+                if any("gh attestation verify" in ln or "cosign verify" in ln for ln in commands):
+                    checked += 1
+                    assert logged_in, f"{name}:{job_name} step '{step.get('name')}' reads the registry before logging in"
+    assert checked >= 4
