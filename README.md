@@ -10,6 +10,7 @@ signing, provenance, admission control and release) runs from here, so a platfor
 the whole fleet without touching 80 repos.
 
 > Design document with the full architecture diagram: [`docs/design.html`](docs/design.html)
+> Threat model of the pipeline itself (STRIDE, residual risks): [`docs/threat-model.md`](docs/threat-model.md)
 
 ```mermaid
 flowchart LR
