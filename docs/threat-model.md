@@ -16,6 +16,7 @@ of scope. Every control below names the file that implements it, so each claim c
 | Environment approvals (QA, appsec) and deployment history | Decide what reaches staging and production, and when |
 | `GITHUB_TOKEN` and job permissions | Write access to packages, releases and code scanning |
 | Dependencies and base images | Code we run but didn't write |
+| Fleet bot credential (`triorex-paved-road-bot` GitHub App key) | Can open and merge pull requests, upload code-scanning results and write issues in every onboarded repo (planned, v1.3.0) |
 
 ## Trust boundaries
 
@@ -49,6 +50,7 @@ Status: **Live** = enforced in the running platform · **Partial** = enforced wi
 | S2 | An app repo forges DAST or promotion evidence | Evidence is checked with `gh attestation verify --signer-workflow` against the platform's `staging-verify.yml` / `release.yml`; an app repo cannot sign as those | `release.yml` | Live |
 | S3 | An app repo calls an **old, vulnerable** platform commit, which still signs as `secure-build.yml` | Fleet report flags repos behind the current release; Dependabot proposes upgrades; beyond dev, provenance must also come from the app's `main` (`--source-ref`) | `fleet/compliance_report.py`, `release.yml` | Partial: verifiers accept any commit of the platform repo (`@.+`); restrict to released commits next |
 | S4 | Commit authorship or trailers misrepresent who wrote a change | Noreply emails; org ruleset rejects disallowed author emails and trailers | `governance/org-ruleset.json` | Partial: commit signing not required |
+| S5 | A stolen fleet-bot App key is used to open or merge pull requests across the fleet | Key stored only in the platform's `fleet-bot` environment (`main` only); App is not a ruleset bypass actor, so `pr-security / gate` still applies; merges only Dependabot or bot PRs with no human pushes; every merged change still stops at QA sign-off and production approval; key rotation runbook | `governance/`, `fleet-automerge.yml` | Planned (v1.3.0, ADR 0005) |
 
 ### Tampering
 
@@ -61,6 +63,7 @@ Status: **Live** = enforced in the running platform · **Partial** = enforced wi
 | T5 | Script injection through PR titles, branch names or workflow inputs | Inputs passed through `env`, never interpolated into `run:`; zizmor gate; `permissions: {}` by default | all workflows, `pr-security.yml` | Live |
 | T6 | Malicious or broken change to the platform repo reaches 80 repos | PR + `pr-security / gate` required; release candidates proven in ring 0 before a final release; contract tests; consumers pin a SHA | `governance/org-ruleset.json`, `promote-release.yml`, `tests/` | Partial: code-owner review is not required (single maintainer; set to 1+ with code owners in an enterprise) |
 | T7 | Policy or scripts drift from the workflow version the app pinned | Each workflow checks out the platform at `job_workflow_sha` from its own OIDC token | all reusable workflows | Live |
+| T8 | Auto-merge ships a malicious or broken dependency update with no human review | Eligibility limited to Dependabot or bot PRs, security updates (patch/minor), patch version updates, Docker digest bumps and base-image refreshes; never majors or `github-actions`; curation still blocks MAL- advisories and releases younger than 7 days (1 day for verified security fixes); full pipeline including DAST; QA sign-off and production approval remain human | `scripts/fleet_automerge.py`, `scripts/curation_check.py`, `security/security-policy.yml` | Planned (v1.3.0, ADR 0005) |
 
 ### Repudiation
 
@@ -85,6 +88,7 @@ Status: **Live** = enforced in the running platform · **Partial** = enforced wi
 | D1 | Sigstore or Rekor outage blocks every release | Target: break-glass with an audit trail; private Sigstore or key-based signing for critical paths | not yet written | Design |
 | D2 | A platform defect stops the whole fleet | Rollout rings, release candidates, contract tests, `[WITHDRAWN]` releases instead of silent deletes | `promote-release.yml`, `tests/` | Live |
 | D3 | Noisy scanners stall delivery | Each gate runs in audit or enforce from one policy file; time-bound exceptions | `security/security-policy.yml` | Live |
+| D4 | An idle repo's production image goes unscanned: no pushes, Dependabot PRs ignored, scheduled workflows disabled after 60 days without activity | Central daily rescan of every production digest from the platform repo; central triage with SLA escalation; base-image refresh PRs; compliance report shows last rescan per repo and the run fails on an unscannable live repo | `production-rescan.yml`, `fleet-triage.yml`, `fleet/compliance_report.py` | Planned (v1.3.0, ADR 0005) |
 
 ### Elevation of privilege
 
