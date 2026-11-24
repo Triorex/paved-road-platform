@@ -68,30 +68,30 @@ OPERATE       vuln-triage.yml (KEV + EPSS → issues with SLA) · scorecard.yml 
 - [ ] **6. Release and operate**: staging → production; triage; Scorecard; fleet onboarding and report
 - [ ] **7. Docs and rehearsal**: threat model, procedure, demo script, roadmap, standards, runbooks, ADRs
 
-## v1.3.0: keeping idle repos patched
+## Design: keeping idle repos patched (not built)
 
-Approved by Blaise on 2026-11-24 (Option A, recommended answers on all three open decisions).
-Decision record: [`adr/0005-idle-repo-vulnerability-management.md`](adr/0005-idle-repo-vulnerability-management.md).
-Branch: `feat/v1.3.0-idle-repo-coverage` (merge to `main` after the release; keep the branch).
+Agreed with Blaise on 2026-11-24 and kept as **design only**. Decision record:
+[`adr/0005-idle-repo-vulnerability-management.md`](adr/0005-idle-repo-vulnerability-management.md).
 
 Goal: a repo with no human activity still has its production image rescanned daily; fixes reach
-staging and DAST automatically and stop at QA sign-off and production, with the waiting time shown
-on the SLA issue. All scheduled work runs centrally in this repo, over `fleet/inventory.yaml`
-(live on the 2 real repos, dry-run on the other 78).
+staging and DAST automatically and stop at QA sign-off and production (Option A), with the waiting
+time shown on the SLA issue. All scheduled work runs centrally in this repo over
+`fleet/inventory.yaml`, with a GitHub App for cross-repository access.
 
 Decisions: fast-lane minimum age 1 day; auto-merge scope = security updates (patch/minor),
 version updates (patch), Docker digest bumps, base-image refreshes, never majors or
 `github-actions`; per-repo `security-triage` schedule removed once central triage enforces.
 
-- [x] **0. Decision record**: ADR 0005, this section, threat model S5, T8, D4
-- [ ] **1. GitHub App** (org owner, in the browser): `triorex-paved-road-bot` on repos with `paved-road=true`; contents and pull requests write, security events write, issues write, actions and checks read; private key only in the platform's `fleet-bot` environment (`main` only); not a ruleset bypass actor
-- [ ] **2. Production rescan**: `production-rescan.yml` (05:30 UTC) + `scripts/production_rescan.py`: `production` tag → digest → verified SBOM attestation → `trivy sbom` with exceptions → SARIF `production-image` on the release commit; `trivy image` fallback with a warning. Tests with a fixture SBOM (lodash 4.17.20, CVE-2021-23337)
-- [ ] **3. Central triage**: `fleet-triage.yml` runs `vuln_triage.py` per repo with the App token; "fix waiting at <gate> since <date>"; escalation to owner team then AppSec at ≤ 2 days to SLA; ownerless repos flagged
-- [ ] **4. Curation fast lane**: `security_fix_min_age_days: 1` for versions that fix an OSV advisory affecting the replaced version; MAL- always blocks
-- [ ] **5. Base-image refresh**: `scripts/base_image_refresh.py`: newest digest of the same Chainguard tag, cosign-verified, rescanned, PR opened by the App
-- [ ] **6. Central auto-merge**: `fleet-automerge.yml` (hourly) + `scripts/fleet_automerge.py` with the eligibility rules in ADR 0005; audit mode comments "would merge: <reason>"
-- [ ] **7. Monitoring**: compliance report columns (last rescan, oldest P0/P1 vs SLA, bot PRs waiting > 2 days, fixes waiting at a gate); rescan fails loudly on an unscannable live repo
-- [ ] **8. Rollout**: `v1.3.0-rc.1` in audit on ring 0 → enforce → `promote-release` → remove per-repo triage schedules
+Build order, if adopted:
+
+1. **GitHub App** `triorex-paved-road-bot`: contents and pull requests write, code scanning write, issues write; actions, checks, commit statuses, deployments and Dependabot alerts read. Key only in a `fleet-bot` environment of this repo (`main` only); not a ruleset bypass actor. Each app's GHCR package grants this repo Read so the central job can resolve digests
+2. **Production rescan** (`production-rescan.yml`, daily): `production` tag → digest → verified SBOM attestation → `trivy sbom` with exceptions → SARIF `production-image` on the release commit; `trivy image` fallback
+3. **Central triage** (`fleet-triage.yml`): "fix waiting at <gate> since <date>"; escalation to owner team then AppSec at ≤ 2 days to SLA; ownerless repos flagged
+4. **Curation fast lane**: `security_fix_min_age_days: 1` for versions fixing an advisory on the replaced version; MAL- always blocks
+5. **Base-image refresh**: newest cosign-verified digest of the same Chainguard tag, rescanned, PR opened by the App
+6. **Central auto-merge** (`fleet-automerge.yml`, hourly) with the eligibility rules in ADR 0005
+7. **Monitoring**: compliance report columns for last rescan, oldest P0/P1 vs SLA, waiting bot PRs and fixes waiting at a gate
+8. **Rollout**: release candidate in audit on ring 0 → enforce → final release → remove per-repo triage schedules
 
 ## Demo pull requests
 
